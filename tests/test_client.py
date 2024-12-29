@@ -1,6 +1,8 @@
-import pytest
-import pandas as pd
 from unittest.mock import Mock, patch
+
+import pandas as pd
+import pytest
+
 from chakra_sdk import ChakraClient
 
 

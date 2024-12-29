@@ -1,9 +1,11 @@
-import requests
+from typing import Any, Dict, Optional, Union
+
 import pandas as pd
-from typing import Optional, Dict, Any, Union
+import requests
+
 from .api.auth import Auth
-from .api.query import Query
 from .api.data import Data
+from .api.query import Query
 
 
 class ChakraClient:
