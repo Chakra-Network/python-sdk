@@ -10,11 +10,7 @@ pip install chakra-sdk
 
 ## Authentication
 
-The SDK supports two authentication methods:
-
-### 1. Credential-based Authentication (Recommended)
-
-Use your Chakra Network access key ID and secret key to authenticate:
+Authenticate with your Chakra Network credentials using your access key ID and secret key:
 
 ```python
 from chakra_sdk import ChakraClient
@@ -27,18 +23,7 @@ client = ChakraClient(
 )
 ```
 
-### 2. Token-based Authentication (Legacy)
-
-If you already have a valid token, you can authenticate directly:
-
-```python
-from chakra_sdk import ChakraClient
-
-client = ChakraClient(
-    api_base_url="http://api.chakra.dev",
-    token="YOUR_TOKEN"
-)
-```
+The SDK will automatically handle session creation and token management internally.
 
 ## Usage
 
@@ -74,22 +59,37 @@ client.push_data("my_table", data)
 
 ## Error Handling
 
-The SDK provides custom exceptions for better error handling:
+The SDK provides custom exceptions for handling authentication and session-related errors:
 
 ```python
-from chakra_sdk import ChakraAuthError, SessionCreationError
+from chakra_sdk import ChakraAuthError, SessionCreationError, SessionValidationError
 
 try:
+    # Initialize client with credentials
     client = ChakraClient(
         api_base_url="http://api.chakra.dev",
-        access_key_id="INVALID_KEY",
-        secret_key="INVALID_SECRET"
+        access_key_id="YOUR_ACCESS_KEY_ID",
+        secret_key="YOUR_SECRET_KEY",
+        username="YOUR_USERNAME"  # Optional
     )
+    
+    # Execute operations
+    df = client.query("SELECT * FROM example_table")
+    
 except SessionCreationError as e:
     print(f"Failed to create session: {e}")
+    # Handle invalid credentials or connection issues
+    
+except SessionValidationError as e:
+    print(f"Session validation failed: {e}")
+    # Handle session expiration or invalidation
+    
 except ChakraAuthError as e:
     print(f"Authentication error: {e}")
+    # Handle other authentication-related errors
 ```
+
+The SDK automatically handles session creation and token management internally. If a session becomes invalid, appropriate exceptions will be raised when attempting operations.
 
 ## Development
 
