@@ -1,11 +1,5 @@
 from typing import Optional, Dict, Any
-try:
-    import pandas as pd
-except ImportError:
-    try:
-        import pandas_2 as pd
-    except ImportError:
-        raise ImportError("Neither pandas nor pandas-2 package is available")
+import pandas as pd
 
 
 class Query:
