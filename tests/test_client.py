@@ -1,5 +1,11 @@
 import pytest
-import pandas as pd
+try:
+    import pandas as pd
+except ImportError:
+    try:
+        import pandas_2 as pd
+    except ImportError:
+        raise ImportError("Neither pandas nor pandas-2 package is available")
 from unittest.mock import Mock, patch
 from chakra_sdk import ChakraClient
 
