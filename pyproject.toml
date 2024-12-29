@@ -23,7 +23,7 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = "^3.8"
-pandas = "^2.2.3"
+pandas = {version = "^2.2.3", python = ">=3.9"}
 requests = "^2.32.3"
 python-dotenv = "^1.0.1"
 
