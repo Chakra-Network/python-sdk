@@ -1,0 +1,47 @@
+[tool.poetry]
+name = "chakra-sdk"
+version = "0.1.0"
+description = "Python SDK for interacting with the Chakra Network API, providing seamless pandas DataFrame integration"
+authors = ["Chakra Network Team"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/Chakra-Network/chakra-sdk"
+keywords = ["chakra", "sdk", "api", "data", "pandas", "dataframe", "database"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Database",
+]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+pandas = "^2.2.3"
+requests = "^2.32.3"
+python-dotenv = "^1.0.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+black = "^24.10.0"
+isort = "^5.13.2"
+pytest-cov = "^4.1.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
