@@ -99,8 +99,11 @@ def test_data_push(mock_session):
 
     # Test authentication check
     client = ChakraClient()  # New client without token
+
     with pytest.raises(ValueError, match="Authentication required"):
         client.data.push("test_table", df)
+
+    client.auth.login("DDB_test123")
 
     # Test dictionary input not implemented
     with pytest.raises(NotImplementedError):
