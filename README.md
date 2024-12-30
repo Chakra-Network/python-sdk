@@ -18,17 +18,17 @@ pip install chakra-py
 ## Quick Start
 
 ```python
-from chakra_py import ChakraClient
+from chakra_py import Chakra
 import pandas as pd
 
 # Initialize client
-client = ChakraClient()
+client = Chakra()
 
 # Authenticate (token must start with "DDB_")
-client.auth.login("DDB_your_token_here")
+client.login("DDB_your_token_here")
 
 # Query data (returns pandas DataFrame)
-df = client.query.execute("SELECT * FROM my_table")
+df = client.execute("SELECT * FROM my_table")
 print(df.head())
 
 # Push data to a new or existing table
@@ -37,7 +37,7 @@ data = pd.DataFrame({
     "name": ["Alice", "Bob", "Charlie"],
     "score": [85.5, 92.0, 78.5]
 })
-client.data.push("students", data, create_if_missing=True)
+client.push("students", data, create_if_missing=True)
 ```
 
 ## Authentication
@@ -46,10 +46,10 @@ The SDK uses token-based authentication. Your token must start with "DDB_" prefi
 
 ```python
 # Valid token
-client.auth.login("DDB_your_token")  # ✓ Works
+client.login("DDB_your_token")  # ✓ Works
 
 # Invalid token
-client.auth.login("invalid_token")    # ✗ Raises ValueError
+client.login("invalid_token")    # ✗ Raises ValueError
 ```
 
 ## Querying Data
@@ -58,10 +58,10 @@ Execute SQL queries and receive results as pandas DataFrames:
 
 ```python
 # Simple query
-df = client.query.execute("SELECT * FROM table_name")
+df = client.execute("SELECT * FROM table_name")
 
 # Complex query with aggregations
-df = client.query.execute("""
+df = client.execute("""
     SELECT 
         category,
         COUNT(*) as count,
@@ -91,7 +91,7 @@ df = pd.DataFrame({
 })
 
 # Create new table with inferred schema
-client.data.push(
+client.push(
     table_name="users",
     data=df,
     create_if_missing=True  # Creates table if it doesn't exist
@@ -104,7 +104,7 @@ new_users = pd.DataFrame({
     'score': np.random.normal(75, 15, 100).round(2),
     'active': np.random.choice([True, False], 100)
 })
-client.data.push("users", new_users, create_if_missing=False)
+client.push("users", new_users, create_if_missing=False)
 ```
 
 The SDK automatically:
@@ -120,18 +120,18 @@ The SDK provides clear error messages for common scenarios:
 ```python
 try:
     # Authentication errors
-    client.query.execute("SELECT * FROM table")  # Without login
+    client.execute("SELECT * FROM table")  # Without login
 except ValueError as e:
     print("Auth error:", e)  # "Authentication required"
 
 try:
-    client.auth.login("invalid")  # Wrong token format
+    client.login("invalid")  # Wrong token format
 except ValueError as e:
     print("Token error:", e)  # "Token must start with 'DDB_'"
 
 try:
     # API errors
-    df = client.query.execute("SELECT * FROM nonexistent_table")
+    df = client.execute("SELECT * FROM nonexistent_table")
 except requests.exceptions.HTTPError as e:
     print("API error:", e)
 ```
