@@ -3,6 +3,32 @@ from typing import Any, Dict, Union
 import pandas as pd
 
 
+def _map_pandas_to_duckdb_type(dtype) -> str:
+    """Convert pandas dtype to DuckDB type.
+
+    Args:
+        dtype: Pandas dtype object
+
+    Returns:
+        str: Corresponding DuckDB type name
+    """
+    dtype_str = str(dtype)
+    if "int" in dtype_str:
+        return "BIGINT"
+    elif "float" in dtype_str:
+        return "DOUBLE"
+    elif "bool" in dtype_str:
+        return "BOOLEAN"
+    elif "datetime" in dtype_str:
+        return "TIMESTAMP"
+    elif "timedelta" in dtype_str:
+        return "INTERVAL"
+    elif "object" in dtype_str:
+        return "VARCHAR"
+    else:
+        return "VARCHAR"  # Default fallback
+
+
 class Data:
     """Handles data push operations."""
 
@@ -36,7 +62,7 @@ class Data:
             if create_if_missing:
                 # Create table with proper schema
                 columns = [
-                    {"name": col, "type": str(dtype)}
+                    {"name": col, "type": _map_pandas_to_duckdb_type(dtype)}
                     for col, dtype in data.dtypes.items()
                 ]
                 create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ("
@@ -45,9 +71,14 @@ class Data:
                 )
                 create_sql += ")"
 
-                self._client._session.post(
-                    f"{self._client.base_url}/api/v1/execute", json={"sql": create_sql}
-                ).raise_for_status()
+                try:
+                    response = self._client._session.post(
+                        f"{self._client.base_url}/api/v1/execute",
+                        json={"sql": create_sql},
+                    )
+                    response.raise_for_status()
+                except Exception as e:
+                    self._client._handle_api_error(e)
 
             # Insert data using batch execute
             if records:
