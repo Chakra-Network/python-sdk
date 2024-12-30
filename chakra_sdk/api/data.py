@@ -71,8 +71,6 @@ class Data:
                 )
                 create_sql += ")"
 
-                print(create_sql)
-
                 try:
                     response = self._client._session.post(
                         f"{self._client.base_url}/api/v1/execute",
