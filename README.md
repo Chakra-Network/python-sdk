@@ -1,6 +1,6 @@
 # Chakra SDK
 
-A Python SDK for interacting with the Chakra Network API (api.chakra.dev). This SDK provides seamless integration with pandas DataFrames for data querying and manipulation.
+A Python SDK for interacting with the Chakra API (api.chakra.dev). This SDK provides seamless integration with pandas DataFrames for data querying and manipulation.
 
 ## Features
 

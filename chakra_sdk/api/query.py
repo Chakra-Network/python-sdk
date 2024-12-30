@@ -25,10 +25,13 @@ class Query:
         if not self._client.token:
             raise ValueError("Authentication required. Call client.auth.login() first.")
 
-        response = self._client._session.post(
-            f"{self._client.base_url}/api/v1/query", json={"sql": query}
-        )
-        response.raise_for_status()
+        try:
+            response = self._client._session.post(
+                f"{self._client.base_url}/api/v1/query", json={"sql": query}
+            )
+            response.raise_for_status()
+        except Exception as e:
+            self._client._handle_api_error(e)
 
         data = response.json()
         # Convert the columnar format to DataFrame

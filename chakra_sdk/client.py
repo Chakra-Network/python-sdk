@@ -6,6 +6,7 @@ import requests
 from .api.auth import Auth
 from .api.data import Data
 from .api.query import Query
+from .exceptions import ChakraAPIError
 
 
 class ChakraClient:
@@ -40,3 +41,20 @@ class ChakraClient:
             self._session.headers.update({"Authorization": f"Bearer {value}"})
         else:
             self._session.headers.pop("Authorization", None)
+
+    def _handle_api_error(self, e: Exception) -> None:
+        """Handle API errors consistently.
+
+        Args:
+            e: The original exception
+
+        Raises:
+            ChakraAPIError: Enhanced error with API response details
+        """
+        if hasattr(e, "response") and hasattr(e.response, "json"):
+            try:
+                error_msg = e.response.json().get("error", str(e))
+                raise ChakraAPIError(error_msg, e.response) from e
+            except ValueError:  # JSON decoding failed
+                raise ChakraAPIError(str(e), e.response) from e
+        raise e  # Re-raise original exception if not an API error
