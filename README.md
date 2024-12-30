@@ -12,7 +12,7 @@ A Python SDK for interacting with the Chakra API (api.chakra.dev). This SDK prov
 ## Installation
 
 ```bash
-pip install chakra-sdk
+pip install chakra-py
 ```
 
 ## Quick Start
