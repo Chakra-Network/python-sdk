@@ -1,4 +1,4 @@
-from .client import ChakraClient
+from .client import Chakra
 
 __version__ = "0.1.0"
-__all__ = ["ChakraClient"]
+__all__ = ["Chakra"]

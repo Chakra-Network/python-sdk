@@ -3,19 +3,19 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import pytest
 
-from chakra_py import ChakraClient
+from chakra_py import Chakra
 
 
 def test_client_initialization():
     """Test basic client initialization."""
-    client = ChakraClient()
+    client = Chakra()
     assert client.base_url == "http://api.chakra.dev"
     assert client.token is None
 
 
 def test_client_token_setting():
     """Test token setting and header updates."""
-    client = ChakraClient()
+    client = Chakra()
     test_token = "DDB_test123"
     client.token = test_token
     assert client.token == test_token
@@ -24,7 +24,7 @@ def test_client_token_setting():
 
 def test_auth_login():
     """Test authentication login with token validation."""
-    client = ChakraClient()
+    client = Chakra()
 
     # Test valid token
     valid_token = "DDB_test123"
@@ -40,7 +40,7 @@ def test_auth_login():
 @patch("requests.Session")
 def test_query_execution(mock_session):
     """Test query execution and DataFrame conversion."""
-    client = ChakraClient()
+    client = Chakra()
     client.login("DDB_test123")
 
     # Mock response data
@@ -65,7 +65,7 @@ def test_query_execution(mock_session):
     assert len(df) == 2
 
     # Test authentication check
-    client = ChakraClient()  # New client without token
+    client = Chakra()  # New client without token
     with pytest.raises(ValueError, match="Authentication required"):
         client.execute("SELECT * FROM test_table")
 
@@ -73,7 +73,7 @@ def test_query_execution(mock_session):
 @patch("requests.Session")
 def test_data_push(mock_session):
     """Test data push functionality."""
-    client = ChakraClient()
+    client = Chakra()
     client.login("DDB_test123")
 
     # Create test DataFrame
@@ -98,7 +98,7 @@ def test_data_push(mock_session):
     assert len(insert_call[1]["json"]["statements"]) == 2
 
     # Test authentication check
-    client = ChakraClient()  # New client without token
+    client = Chakra()  # New client without token
 
     with pytest.raises(ValueError, match="Authentication required"):
         client.push("test_table", df)

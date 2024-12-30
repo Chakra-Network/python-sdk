@@ -18,11 +18,11 @@ pip install chakra-py
 ## Quick Start
 
 ```python
-from chakra_py import ChakraClient
+from chakra_py import Chakra
 import pandas as pd
 
 # Initialize client
-client = ChakraClient()
+client = Chakra()
 
 # Authenticate (token must start with "DDB_")
 client.login("DDB_your_token_here")

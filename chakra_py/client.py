@@ -6,7 +6,7 @@ import requests
 from .exceptions import ChakraAPIError
 
 
-class ChakraClient:
+class Chakra:
     """Main client for interacting with the Chakra API.
 
     Provides a simple, unified interface for all Chakra operations including
@@ -15,7 +15,7 @@ class ChakraClient:
     client instance.
 
     Example:
-        >>> client = ChakraClient()
+        >>> client = Chakra()
         >>> client.login("DDB_your_token")
         >>> df = client.execute("SELECT * FROM table")
         >>> client.push("new_table", df)
