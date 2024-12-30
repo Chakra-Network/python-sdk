@@ -28,20 +28,20 @@ def test_auth_login():
 
     # Test valid token
     valid_token = "DDB_test123"
-    client.auth.login(valid_token)
+    client.login(valid_token)
     assert client.token == valid_token
     assert client._session.headers["Authorization"] == f"Bearer {valid_token}"
 
     # Test invalid token format
     with pytest.raises(ValueError, match="Token must start with 'DDB_'"):
-        client.auth.login("invalid_token")
+        client.login("invalid_token")
 
 
 @patch("requests.Session")
 def test_query_execution(mock_session):
     """Test query execution and DataFrame conversion."""
     client = ChakraClient()
-    client.auth.login("DDB_test123")
+    client.login("DDB_test123")
 
     # Mock response data
     mock_response = Mock()
@@ -52,7 +52,7 @@ def test_query_execution(mock_session):
     mock_session.return_value.post.return_value = mock_response
 
     # Test query execution
-    df = client.query.execute("SELECT * FROM test_table")
+    df = client.execute("SELECT * FROM test_table")
 
     # Verify request
     mock_session.return_value.post.assert_called_with(
@@ -67,14 +67,14 @@ def test_query_execution(mock_session):
     # Test authentication check
     client = ChakraClient()  # New client without token
     with pytest.raises(ValueError, match="Authentication required"):
-        client.query.execute("SELECT * FROM test_table")
+        client.execute("SELECT * FROM test_table")
 
 
 @patch("requests.Session")
 def test_data_push(mock_session):
     """Test data push functionality."""
     client = ChakraClient()
-    client.auth.login("DDB_test123")
+    client.login("DDB_test123")
 
     # Create test DataFrame
     df = pd.DataFrame({"id": [1, 2], "name": ["test1", "test2"]})
@@ -85,7 +85,7 @@ def test_data_push(mock_session):
     mock_session.return_value.post.return_value = mock_response
 
     # Test pushing data
-    client.data.push("test_table", df)
+    client.push("test_table", df)
 
     # Verify create table request
     create_call = mock_session.return_value.post.call_args_list[0]
@@ -101,10 +101,10 @@ def test_data_push(mock_session):
     client = ChakraClient()  # New client without token
 
     with pytest.raises(ValueError, match="Authentication required"):
-        client.data.push("test_table", df)
+        client.push("test_table", df)
 
-    client.auth.login("DDB_test123")
+    client.login("DDB_test123")
 
     # Test dictionary input not implemented
     with pytest.raises(NotImplementedError):
-        client.data.push("test_table", {"key": "value"})
+        client.push("test_table", {"key": "value"})
