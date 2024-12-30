@@ -80,8 +80,7 @@ class ChakraClient:
 
         try:
             response = self._session.post(
-                f"{self.base_url}/api/v1/query",
-                json={"sql": query}
+                f"{self.base_url}/api/v1/query", json={"sql": query}
             )
             response.raise_for_status()
         except Exception as e:
@@ -126,8 +125,7 @@ class ChakraClient:
 
                 try:
                     response = self._session.post(
-                        f"{self.base_url}/api/v1/execute",
-                        json={"sql": create_sql}
+                        f"{self.base_url}/api/v1/execute", json={"sql": create_sql}
                     )
                     response.raise_for_status()
                 except Exception as e:
@@ -153,7 +151,7 @@ class ChakraClient:
                 try:
                     response = self._session.post(
                         f"{self.base_url}/api/v1/execute/batch",
-                        json={"statements": statements}
+                        json={"statements": statements},
                     )
                     response.raise_for_status()
                 except Exception as e:
