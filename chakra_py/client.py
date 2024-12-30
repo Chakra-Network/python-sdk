@@ -77,11 +77,8 @@ class ChakraClient:
         """
         if not self.token:
             raise ValueError("Not authenticated. Call login() first")
-        
-        response = self._session.post(
-            f"{self.base_url}/query",
-            json={"query": query}
-        )
+
+        response = self._session.post(f"{self.base_url}/query", json={"query": query})
         response.raise_for_status()
         return pd.DataFrame(response.json())
 
@@ -104,16 +101,13 @@ class ChakraClient:
         """
         if not self.token:
             raise ValueError("Not authenticated. Call login() first")
-            
+
         if isinstance(data, pd.DataFrame):
             data = data.to_dict(orient="records")
-            
+
         response = self._session.post(
             f"{self.base_url}/data/{table_name}",
-            json={
-                "data": data,
-                "create_if_missing": create_if_missing
-            }
+            json={"data": data, "create_if_missing": create_if_missing},
         )
         response.raise_for_status()
 
