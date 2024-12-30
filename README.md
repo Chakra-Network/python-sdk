@@ -18,7 +18,7 @@ pip install chakra-py
 ## Quick Start
 
 ```python
-from chakra_sdk import ChakraClient
+from chakra_py import ChakraClient
 import pandas as pd
 
 # Initialize client

@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import pytest
 
-from chakra_sdk import ChakraClient
+from chakra_py import ChakraClient
 
 
 def test_client_initialization():
