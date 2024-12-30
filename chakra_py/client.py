@@ -11,7 +11,7 @@ from .exceptions import ChakraAPIError
 
 class ChakraClient:
     """Main client for interacting with the Chakra API.
-    
+
     Provides a simple, unified interface for all Chakra operations including
     authentication, querying, and data manipulation. Similar to other modern
     Python SDKs like exa-py, all operations are available directly from the
@@ -37,11 +37,6 @@ class ChakraClient:
         self._token = token
         self._session = requests.Session()
 
-        # Initialize API components
-        self.auth = Auth(self)
-        self.query = Query(self)
-        self.data = Data(self)
-
     @property
     def token(self) -> Optional[str]:
         return self._token
@@ -63,7 +58,9 @@ class ChakraClient:
         Raises:
             ValueError: If token doesn't start with 'DDB_'
         """
-        return self.auth.login(token)
+        if not token.startswith("DDB_"):
+            raise ValueError("Token must start with 'DDB_'")
+        self.token = token
 
     def execute(self, query: str) -> pd.DataFrame:
         """Execute a query and return results as a pandas DataFrame.
@@ -78,7 +75,15 @@ class ChakraClient:
             requests.exceptions.HTTPError: If the query fails
             ValueError: If not authenticated
         """
-        return self.query.execute(query)
+        if not self.token:
+            raise ValueError("Not authenticated. Call login() first")
+        
+        response = self._session.post(
+            f"{self.base_url}/query",
+            json={"query": query}
+        )
+        response.raise_for_status()
+        return pd.DataFrame(response.json())
 
     def push(
         self,
@@ -97,7 +102,20 @@ class ChakraClient:
             requests.exceptions.HTTPError: If the push operation fails
             ValueError: If not authenticated
         """
-        return self.data.push(table_name, data, create_if_missing)
+        if not self.token:
+            raise ValueError("Not authenticated. Call login() first")
+            
+        if isinstance(data, pd.DataFrame):
+            data = data.to_dict(orient="records")
+            
+        response = self._session.post(
+            f"{self.base_url}/data/{table_name}",
+            json={
+                "data": data,
+                "create_if_missing": create_if_missing
+            }
+        )
+        response.raise_for_status()
 
     def _handle_api_error(self, e: Exception) -> None:
         """Handle API errors consistently.
