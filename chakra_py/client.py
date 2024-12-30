@@ -76,7 +76,7 @@ class ChakraClient:
             ValueError: If not authenticated
         """
         if not self.token:
-            raise ValueError("Not authenticated. Call login() first")
+            raise ValueError("Authentication required")
 
         try:
             response = self._session.post(
@@ -107,7 +107,7 @@ class ChakraClient:
             ValueError: If not authenticated
         """
         if not self.token:
-            raise ValueError("Not authenticated. Call login() first")
+            raise ValueError("Authentication required")
 
         if isinstance(data, pd.DataFrame):
             records = data.to_dict(orient="records")
