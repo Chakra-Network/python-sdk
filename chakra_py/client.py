@@ -5,33 +5,33 @@ import requests
 
 from .exceptions import ChakraAPIError
 
+BASE_URL = "https://api.chakra.dev".rstrip("/")
+
 
 class Chakra:
     """Main client for interacting with the Chakra API.
 
     Provides a simple, unified interface for all Chakra operations including
-    authentication, querying, and data manipulation. Similar to other modern
-    Python SDKs like exa-py, all operations are available directly from the
-    client instance.
+    authentication, querying, and data manipulation.
 
     Example:
-        >>> client = Chakra()
-        >>> client.login("DDB_your_token")
+        >>> client = Chakra("DB_SESSION_KEY")
+        >>> client.login()
         >>> df = client.execute("SELECT * FROM table")
         >>> client.push("new_table", df)
     """
 
     def __init__(
-        self, base_url: str = "http://api.chakra.dev", token: Optional[str] = None
+        self,
+        db_session_key: str,
     ):
         """Initialize the Chakra client.
 
         Args:
-            base_url: The base URL for the Chakra API
-            token: Optional authentication token
+            db_session_key: The DB session key to use - can be found in the Chakra Settings page
         """
-        self.base_url = base_url.rstrip("/")
-        self._token = token
+        self._db_session_key = db_session_key
+        self._token = None
         self._session = requests.Session()
 
     @property
@@ -46,18 +46,37 @@ class Chakra:
         else:
             self._session.headers.pop("Authorization", None)
 
-    def login(self, token: str) -> None:
-        """Set the authentication token for API requests.
+    def _fetch_token(self, db_session_key: str) -> str:
+        """Fetch a token from the Chakra API.
 
         Args:
-            token: The DDB token to use (format: 'DDB_xxxxx')
+            db_session_key: The DB session key to use
+
+        Returns:
+            The token to use for authentication
+        """
+        access_key_id, secret_access_key, username = db_session_key.split(":")
+
+        response = self._session.post(
+            f"{BASE_URL}/api/v1/servers",
+            json={
+                "accessKey": access_key_id,
+                "secretKey": secret_access_key,
+                "username": username,
+            },
+        )
+        response.raise_for_status()
+        return response.json()["token"]
+
+    def login(self) -> None:
+        """Set the authentication token for API requests.
 
         Raises:
             ValueError: If token doesn't start with 'DDB_'
         """
-        if not token.startswith("DDB_"):
+        self.token = self._fetch_token(self._db_session_key)
+        if not self.token.startswith("DDB_"):
             raise ValueError("Token must start with 'DDB_'")
-        self.token = token
 
     def execute(self, query: str) -> pd.DataFrame:
         """Execute a query and return results as a pandas DataFrame.
@@ -77,7 +96,7 @@ class Chakra:
 
         try:
             response = self._session.post(
-                f"{self.base_url}/api/v1/query", json={"sql": query}
+                f"{BASE_URL}/api/v1/query", json={"sql": query}
             )
             response.raise_for_status()
         except Exception as e:
@@ -122,7 +141,7 @@ class Chakra:
 
                 try:
                     response = self._session.post(
-                        f"{self.base_url}/api/v1/execute", json={"sql": create_sql}
+                        f"{BASE_URL}/api/v1/execute", json={"sql": create_sql}
                     )
                     response.raise_for_status()
                 except Exception as e:
@@ -147,7 +166,7 @@ class Chakra:
 
                 try:
                     response = self._session.post(
-                        f"{self.base_url}/api/v1/execute/batch",
+                        f"{BASE_URL}/api/v1/execute/batch",
                         json={"statements": statements},
                     )
                     response.raise_for_status()

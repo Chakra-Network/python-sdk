@@ -1,10 +1,10 @@
 # Chakra SDK
 
-A Python SDK for interacting with the Chakra API (api.chakra.dev). This SDK provides seamless integration with pandas DataFrames for data querying and manipulation.
+A Python SDK for interacting with the Chakra API. This SDK provides seamless integration with pandas DataFrames for data querying and manipulation.
 
 ## Features
 
-- **Token-based Authentication**: Secure authentication using DDB tokens
+- **Token-based Authentication**: Secure authentication using DB Session keys
 - **Pandas Integration**: Query results automatically converted to pandas DataFrames
 - **Automatic Table Management**: Create and update tables with schema inference
 - **Batch Operations**: Efficient data pushing with batched inserts
@@ -22,10 +22,10 @@ from chakra_py import Chakra
 import pandas as pd
 
 # Initialize client
-client = Chakra()
+client = Chakra("YOUR_DB_SESSION_KEY")
 
-# Authenticate (token must start with "DDB_")
-client.login("DDB_your_token_here")
+# REQUIRED: Authenticate and set the token
+client.login()
 
 # Query data (returns pandas DataFrame)
 df = client.execute("SELECT * FROM my_table")
@@ -38,18 +38,6 @@ data = pd.DataFrame({
     "score": [85.5, 92.0, 78.5]
 })
 client.push("students", data, create_if_missing=True)
-```
-
-## Authentication
-
-The SDK uses token-based authentication. Your token must start with "DDB_" prefix:
-
-```python
-# Valid token
-client.login("DDB_your_token")  # ✓ Works
-
-# Invalid token
-client.login("invalid_token")    # ✗ Raises ValueError
 ```
 
 ## Querying Data
@@ -112,29 +100,6 @@ The SDK automatically:
 - Creates tables with proper schema when needed
 - Handles NULL values and type conversions
 - Performs batch inserts for better performance
-
-## Error Handling
-
-The SDK provides clear error messages for common scenarios:
-
-```python
-try:
-    # Authentication errors
-    client.execute("SELECT * FROM table")  # Without login
-except ValueError as e:
-    print("Auth error:", e)  # "Authentication required"
-
-try:
-    client.login("invalid")  # Wrong token format
-except ValueError as e:
-    print("Token error:", e)  # "Token must start with 'DDB_'"
-
-try:
-    # API errors
-    df = client.execute("SELECT * FROM nonexistent_table")
-except requests.exceptions.HTTPError as e:
-    print("API error:", e)
-```
 
 ## Development
 
