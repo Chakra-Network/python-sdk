@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "chakra-py"
-version = "1.0.3"
+version = "1.0.5"
 description = "Python SDK for interacting with the Chakra API, providing seamless pandas DataFrame integration"
 authors = ["Chakra Labs Team"]
 license = "MIT"
