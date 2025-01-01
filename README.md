@@ -1,5 +1,7 @@
 # Chakra SDK
 
+![Chakra Banner](/banner.png)
+
 A Python SDK for interacting with the Chakra API. This SDK provides seamless integration with pandas DataFrames for data querying and manipulation.
 
 ## Features
