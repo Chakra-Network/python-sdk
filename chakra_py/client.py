@@ -2,6 +2,8 @@ from typing import Any, Dict, Optional, Union
 
 import pandas as pd
 import requests
+from colorama import Fore, Style
+from tqdm import tqdm
 
 from .exceptions import ChakraAPIError
 
@@ -74,36 +76,61 @@ class Chakra:
         Raises:
             ValueError: If token doesn't start with 'DDB_'
         """
-        self.token = self._fetch_token(self._db_session_key)
-        if not self.token.startswith("DDB_"):
-            raise ValueError("Token must start with 'DDB_'")
+        print(f"\n{Fore.GREEN}Authenticating with Chakra DB...{Style.RESET_ALL}")
+
+        with tqdm(
+            total=100,
+            desc="Authenticating",
+            bar_format="{l_bar}{bar}| {n:.0f}%",
+            colour="green",
+        ) as pbar:
+
+            pbar.update(30)
+            pbar.set_description("Fetching token...")
+            self.token = self._fetch_token(self._db_session_key)
+
+            pbar.update(40)
+            pbar.set_description("Token fetched")
+            if not self.token.startswith("DDB_"):
+                raise ValueError("Token must start with 'DDB_'")
+
+            pbar.update(30)
+            pbar.set_description("Authentication complete")
+
+        print(f"{Fore.GREEN}✓ Successfully authenticated!{Style.RESET_ALL}\n")
 
     def execute(self, query: str) -> pd.DataFrame:
-        """Execute a query and return results as a pandas DataFrame.
-
-        Args:
-            query: The SQL query string to execute
-
-        Returns:
-            pandas.DataFrame containing the query results
-
-        Raises:
-            requests.exceptions.HTTPError: If the query fails
-            ValueError: If not authenticated
-        """
+        """Execute a query and return results as a pandas DataFrame."""
         if not self.token:
             raise ValueError("Authentication required")
 
-        try:
-            response = self._session.post(
-                f"{BASE_URL}/api/v1/query", json={"sql": query}
-            )
-            response.raise_for_status()
-        except Exception as e:
-            self._handle_api_error(e)
+        with tqdm(
+            total=3,
+            desc="Preparing query...",
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} steps",
+            colour="green",
+        ) as pbar:
 
-        data = response.json()
-        return pd.DataFrame(data["rows"], columns=data["columns"])
+            pbar.set_description("Executing query...")
+            try:
+                response = self._session.post(
+                    f"{BASE_URL}/api/v1/query", json={"sql": query}
+                )
+                response.raise_for_status()
+            except Exception as e:
+                self._handle_api_error(e)
+            pbar.update(1)
+
+            pbar.set_description("Processing results...")
+            data = response.json()
+            pbar.update(1)
+
+            pbar.set_description("Building DataFrame...")
+            df = pd.DataFrame(data["rows"], columns=data["columns"])
+            pbar.update(1)
+
+        print(f"{Fore.GREEN}✓ Query executed successfully!{Style.RESET_ALL}\n")
+        return df
 
     def push(
         self,
@@ -111,67 +138,75 @@ class Chakra:
         data: Union[pd.DataFrame, Dict[str, Any]],
         create_if_missing: bool = True,
     ) -> None:
-        """Push data to a table.
-
-        Args:
-            table_name: Name of the target table
-            data: DataFrame or dictionary containing the data to push
-            create_if_missing: Whether to create the table if it doesn't exist
-
-        Raises:
-            requests.exceptions.HTTPError: If the push operation fails
-            ValueError: If not authenticated
-        """
+        """Push data to a table."""
         if not self.token:
             raise ValueError("Authentication required")
 
         if isinstance(data, pd.DataFrame):
             records = data.to_dict(orient="records")
+            total_records = len(records)
 
-            if create_if_missing:
-                columns = [
-                    {"name": col, "type": self._map_pandas_to_duckdb_type(dtype)}
-                    for col, dtype in data.dtypes.items()
-                ]
-                create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ("
-                create_sql += ", ".join(
-                    [f"{col['name']} {col['type']}" for col in columns]
-                )
-                create_sql += ")"
+            with tqdm(
+                total=total_records,
+                desc="Preparing data...",
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} records",
+                colour="green",
+            ) as pbar:
 
-                try:
-                    response = self._session.post(
-                        f"{BASE_URL}/api/v1/execute", json={"sql": create_sql}
+                if create_if_missing:
+                    pbar.set_description("Creating table schema...")
+                    columns = [
+                        {"name": col, "type": self._map_pandas_to_duckdb_type(dtype)}
+                        for col, dtype in data.dtypes.items()
+                    ]
+                    create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ("
+                    create_sql += ", ".join(
+                        [f"{col['name']} {col['type']}" for col in columns]
                     )
-                    response.raise_for_status()
-                except Exception as e:
-                    self._handle_api_error(e)
+                    create_sql += ")"
 
-            if records:
-                placeholders = ", ".join(["?" for _ in records[0]])
-                insert_sql = f"INSERT INTO {table_name} VALUES ({placeholders})"
-
-                statements = []
-                for record in records:
-                    values = [str(v) if pd.notna(v) else None for v in record.values()]
-                    stmt = insert_sql.replace("?", "%s") % tuple(
-                        (
-                            f"'{v}'"
-                            if isinstance(v, str)
-                            else str(v) if v is not None else "NULL"
+                    try:
+                        response = self._session.post(
+                            f"{BASE_URL}/api/v1/execute", json={"sql": create_sql}
                         )
-                        for v in values
-                    )
-                    statements.append(stmt)
+                        response.raise_for_status()
+                    except Exception as e:
+                        self._handle_api_error(e)
 
-                try:
-                    response = self._session.post(
-                        f"{BASE_URL}/api/v1/execute/batch",
-                        json={"statements": statements},
-                    )
-                    response.raise_for_status()
-                except Exception as e:
-                    self._handle_api_error(e)
+                if records:
+                    pbar.set_description(f"Preparing records...")
+                    placeholders = ", ".join(["?" for _ in records[0]])
+                    insert_sql = f"INSERT INTO {table_name} VALUES ({placeholders})"
+
+                    statements = []
+                    for record in records:
+                        values = [
+                            str(v) if pd.notna(v) else None for v in record.values()
+                        ]
+                        stmt = insert_sql.replace("?", "%s") % tuple(
+                            (
+                                f"'{v}'"
+                                if isinstance(v, str)
+                                else str(v) if v is not None else "NULL"
+                            )
+                            for v in values
+                        )
+                        statements.append(stmt)
+                        pbar.update(1)
+
+                    pbar.set_description("Uploading data...")
+                    try:
+                        response = self._session.post(
+                            f"{BASE_URL}/api/v1/execute/batch",
+                            json={"statements": statements},
+                        )
+                        response.raise_for_status()
+                    except Exception as e:
+                        self._handle_api_error(e)
+
+            print(
+                f"{Fore.GREEN}✓ Successfully pushed {total_records} records to {table_name}!{Style.RESET_ALL}\n"
+            )
         else:
             raise NotImplementedError("Dictionary input not yet implemented")
 

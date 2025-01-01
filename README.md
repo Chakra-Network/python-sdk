@@ -109,7 +109,7 @@ To contribute to the SDK:
 
 1. Clone the repository
 ```bash
-git clone https://github.com/Chakra-Network/chakra-sdk.git
+git clone https://github.com/Chakra-Network/python-sdk.git
 cd chakra-sdk
 ```
 
