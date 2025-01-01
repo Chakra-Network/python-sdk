@@ -1,6 +1,6 @@
 # Chakra SDK
 
-![Chakra Banner](/banner.png)
+![Chakra Banner](https://github.com/Chakra-Network/python-sdk/blob/8c0b9c94a889562e7c9010e4d8bbc6894c1653ae/banner.png)
 
 A Python SDK for interacting with the Chakra API. This SDK provides seamless integration with pandas DataFrames for data querying and manipulation.
 
