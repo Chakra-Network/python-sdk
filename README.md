@@ -24,7 +24,7 @@ from chakra_py import Chakra
 import pandas as pd
 
 # Initialize client
-client = Chakra("YOUR_DB_SESSION_KEY")
+client = Chakra("YOUR_ACCESS_KEY_ID:YOUR_SECRET_ACCESS_KEY:YOUR_DB_SESSION_KEY")
 
 # REQUIRED: Authenticate and set the token
 client.login()
