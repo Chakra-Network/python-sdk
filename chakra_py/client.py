@@ -9,6 +9,10 @@ from .exceptions import ChakraAPIError
 
 BASE_URL = "https://api.chakra.dev".rstrip("/")
 
+# Add constants at the top
+DEFAULT_BATCH_SIZE = 1000
+TOKEN_PREFIX = "DDB_"
+
 
 class Chakra:
     """Main client for interacting with the Chakra API.
@@ -70,12 +74,105 @@ class Chakra:
         response.raise_for_status()
         return response.json()["token"]
 
-    def login(self) -> None:
-        """Set the authentication token for API requests.
+    def _create_table_schema(
+        self, table_name: str, data: pd.DataFrame, pbar: tqdm
+    ) -> None:
+        """Create table schema if it doesn't exist."""
+        pbar.set_description("Creating table schema...")
+        columns = [
+            {"name": col, "type": self._map_pandas_to_duckdb_type(dtype)}
+            for col, dtype in data.dtypes.items()
+        ]
+        create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ("
+        create_sql += ", ".join(f"{col['name']} {col['type']}" for col in columns)
+        create_sql += ")"
 
-        Raises:
-            ValueError: If token doesn't start with 'DDB_'
-        """
+        response = self._session.post(
+            f"{BASE_URL}/api/v1/query", json={"sql": create_sql}
+        )
+        response.raise_for_status()
+
+    def _replace_existing_table(self, table_name: str, pbar: tqdm) -> None:
+        """Drop existing table if replace_if_exists is True."""
+        pbar.set_description(f"Replacing table...")
+        response = self._session.post(
+            f"{BASE_URL}/api/v1/execute",
+            json={"sql": f"DROP TABLE IF EXISTS {table_name}"},
+        )
+        response.raise_for_status()
+
+    def _process_batch(
+        self, table_name: str, batch: list, batch_number: int, pbar: tqdm
+    ) -> None:
+        """Process and upload a single batch of records."""
+        # Create placeholders for the batch
+        value_placeholders = "(" + ", ".join(["?" for _ in batch[0]]) + ")"
+        batch_placeholders = ", ".join([value_placeholders for _ in batch])
+        insert_sql = f"INSERT INTO {table_name} VALUES {batch_placeholders}"
+
+        # Flatten parameters for this batch
+        parameters = [
+            str(value) if pd.notna(value) else "NULL"
+            for record in batch
+            for value in record.values()
+        ]
+
+        pbar.set_description(f"Uploading batch {batch_number}...")
+        response = self._session.post(
+            f"{BASE_URL}/api/v1/query",
+            json={"sql": insert_sql, "parameters": parameters},
+        )
+        response.raise_for_status()
+
+    def push(
+        self,
+        table_name: str,
+        data: Union[pd.DataFrame, Dict[str, Any]],
+        create_if_missing: bool = True,
+        replace_if_exists: bool = False,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+    ) -> None:
+        """Push data to a table."""
+        if not self.token:
+            raise ValueError("Authentication required")
+
+        if not isinstance(data, pd.DataFrame):
+            raise NotImplementedError("Dictionary input not yet implemented")
+
+        records = data.to_dict(orient="records")
+        total_records = len(records)
+
+        with tqdm(
+            total=total_records,
+            desc="Preparing data...",
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} records",
+            colour="green",
+        ) as pbar:
+            try:
+                if replace_if_exists:
+                    self._replace_existing_table(table_name, pbar)
+
+                if create_if_missing or replace_if_exists:
+                    self._create_table_schema(table_name, data, pbar)
+
+                if records:
+                    pbar.set_description(f"Preparing records...")
+                    for i in range(0, len(records), batch_size):
+                        batch = records[i : i + batch_size]
+                        self._process_batch(
+                            table_name, batch, i // batch_size + 1, pbar
+                        )
+                        pbar.update(len(batch))
+
+            except Exception as e:
+                self._handle_api_error(e)
+
+        print(
+            f"{Fore.GREEN}✓ Successfully pushed {total_records} records to {table_name}!{Style.RESET_ALL}\n"
+        )
+
+    def login(self) -> None:
+        """Set the authentication token for API requests."""
         print(f"\n{Fore.GREEN}Authenticating with Chakra DB...{Style.RESET_ALL}")
 
         with tqdm(
@@ -84,15 +181,14 @@ class Chakra:
             bar_format="{l_bar}{bar}| {n:.0f}%",
             colour="green",
         ) as pbar:
-
             pbar.update(30)
             pbar.set_description("Fetching token...")
             self.token = self._fetch_token(self._db_session_key)
 
             pbar.update(40)
             pbar.set_description("Token fetched")
-            if not self.token.startswith("DDB_"):
-                raise ValueError("Token must start with 'DDB_'")
+            if not self.token.startswith(TOKEN_PREFIX):
+                raise ValueError(f"Token must start with '{TOKEN_PREFIX}'")
 
             pbar.update(30)
             pbar.set_description("Authentication complete")
@@ -131,104 +227,6 @@ class Chakra:
 
         print(f"{Fore.GREEN}✓ Query executed successfully!{Style.RESET_ALL}\n")
         return df
-
-    def push(
-        self,
-        table_name: str,
-        data: Union[pd.DataFrame, Dict[str, Any]],
-        create_if_missing: bool = True,
-        replace_if_exists: bool = False,
-    ) -> None:
-        """Push data to a table."""
-        if not self.token:
-            raise ValueError("Authentication required")
-
-        if isinstance(data, pd.DataFrame):
-            records = data.to_dict(orient="records")
-            total_records = len(records)
-
-            with tqdm(
-                total=total_records,
-                desc="Preparing data...",
-                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} records",
-                colour="green",
-            ) as pbar:
-                # TODO make this atomic https://duckdb.org/2024/09/25/changing-data-with-confidence-and-acid.html
-                if replace_if_exists:
-                    pbar.set_description(f"Replacing table...")
-                    try:
-                        response = self._session.post(
-                            f"{BASE_URL}/api/v1/execute",
-                            json={"sql": f"DROP TABLE IF EXISTS {table_name}"},
-                        )
-                        response.raise_for_status()
-                    except Exception as e:
-                        self._handle_api_error(e)
-
-                if create_if_missing or replace_if_exists:
-                    pbar.set_description("Creating table schema...")
-                    columns = [
-                        {"name": col, "type": self._map_pandas_to_duckdb_type(dtype)}
-                        for col, dtype in data.dtypes.items()
-                    ]
-                    create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ("
-                    create_sql += ", ".join(
-                        [f"{col['name']} {col['type']}" for col in columns]
-                    )
-                    create_sql += ")"
-
-                    try:
-                        response = self._session.post(
-                            f"{BASE_URL}/api/v1/execute", json={"sql": create_sql}
-                        )
-                        response.raise_for_status()
-                    except Exception as e:
-                        self._handle_api_error(e)
-
-                if records:
-                    pbar.set_description(f"Preparing records...")
-                    # kind of gross but create one large INSERT statement with multiple value sets
-                    # batch is not well supported right now
-                    values_list = []
-                    for record in records:
-                        values = [
-                            str(v) if pd.notna(v) else None for v in record.values()
-                        ]
-                        value_set = (
-                            "("
-                            + ", ".join(
-                                (
-                                    f"'{v}'"
-                                    if isinstance(v, str)
-                                    else str(v) if v is not None else "NULL"
-                                )
-                                for v in values
-                            )
-                            + ")"
-                        )
-                        values_list.append(value_set)
-                        pbar.update(1)
-
-                    # Combine all value sets into a single INSERT statement
-                    insert_sql = (
-                        f"INSERT INTO {table_name} VALUES {', '.join(values_list)}"
-                    )
-
-                    pbar.set_description("Uploading data...")
-                    try:
-                        response = self._session.post(
-                            f"{BASE_URL}/api/v1/execute",
-                            json={"sql": insert_sql},
-                        )
-                        response.raise_for_status()
-                    except Exception as e:
-                        self._handle_api_error(e)
-
-            print(
-                f"{Fore.GREEN}✓ Successfully pushed {total_records} records to {table_name}!{Style.RESET_ALL}\n"
-            )
-        else:
-            raise NotImplementedError("Dictionary input not yet implemented")
 
     def _map_pandas_to_duckdb_type(self, dtype) -> str:
         """Convert pandas dtype to DuckDB type.
