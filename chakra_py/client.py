@@ -137,6 +137,7 @@ class Chakra:
         table_name: str,
         data: Union[pd.DataFrame, Dict[str, Any]],
         create_if_missing: bool = True,
+        replace_if_exists: bool = False,
     ) -> None:
         """Push data to a table."""
         if not self.token:
@@ -152,8 +153,19 @@ class Chakra:
                 bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} records",
                 colour="green",
             ) as pbar:
+                # TODO make this atomic https://duckdb.org/2024/09/25/changing-data-with-confidence-and-acid.html
+                if replace_if_exists:
+                    pbar.set_description(f"Replacing table...")
+                    try:
+                        response = self._session.post(
+                            f"{BASE_URL}/api/v1/execute",
+                            json={"sql": f"DROP TABLE IF EXISTS {table_name}"},
+                        )
+                        response.raise_for_status()
+                    except Exception as e:
+                        self._handle_api_error(e)
 
-                if create_if_missing:
+                if create_if_missing or replace_if_exists:
                     pbar.set_description("Creating table schema...")
                     columns = [
                         {"name": col, "type": self._map_pandas_to_duckdb_type(dtype)}
@@ -175,30 +187,38 @@ class Chakra:
 
                 if records:
                     pbar.set_description(f"Preparing records...")
-                    placeholders = ", ".join(["?" for _ in records[0]])
-                    insert_sql = f"INSERT INTO {table_name} VALUES ({placeholders})"
-
-                    statements = []
+                    # kind of gross but create one large INSERT statement with multiple value sets
+                    # batch is not well supported right now
+                    values_list = []
                     for record in records:
                         values = [
                             str(v) if pd.notna(v) else None for v in record.values()
                         ]
-                        stmt = insert_sql.replace("?", "%s") % tuple(
-                            (
-                                f"'{v}'"
-                                if isinstance(v, str)
-                                else str(v) if v is not None else "NULL"
+                        value_set = (
+                            "("
+                            + ", ".join(
+                                (
+                                    f"'{v}'"
+                                    if isinstance(v, str)
+                                    else str(v) if v is not None else "NULL"
+                                )
+                                for v in values
                             )
-                            for v in values
+                            + ")"
                         )
-                        statements.append(stmt)
+                        values_list.append(value_set)
                         pbar.update(1)
+
+                    # Combine all value sets into a single INSERT statement
+                    insert_sql = (
+                        f"INSERT INTO {table_name} VALUES {', '.join(values_list)}"
+                    )
 
                     pbar.set_description("Uploading data...")
                     try:
                         response = self._session.post(
-                            f"{BASE_URL}/api/v1/execute/batch",
-                            json={"statements": statements},
+                            f"{BASE_URL}/api/v1/execute",
+                            json={"sql": insert_sql},
                         )
                         response.raise_for_status()
                     except Exception as e:

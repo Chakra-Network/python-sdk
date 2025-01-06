@@ -110,8 +110,7 @@ def test_data_push(mock_session):
 
     # Verify batch insert request
     insert_call = mock_session.return_value.post.call_args_list[2]
-    assert insert_call[0][0] == "https://api.chakra.dev/api/v1/execute/batch"
-    assert len(insert_call[1]["json"]["statements"]) == 2
+    assert insert_call[0][0] == "https://api.chakra.dev/api/v1/execute"
 
     # Test dictionary input not implemented
     with pytest.raises(NotImplementedError):
