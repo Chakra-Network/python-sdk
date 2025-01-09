@@ -195,7 +195,36 @@ class Chakra:
 
         print(f"{Fore.GREEN}✓ Successfully authenticated!{Style.RESET_ALL}\n")
 
-    def execute(self, query: str) -> pd.DataFrame:
+    # HACK: this is a hack to get around the fact that the duckdb go doesn't support positional parameters
+    def __query_has_positional_parameters(self, query: str) -> bool:
+        """Check if the query has positional parameters."""
+        return "$1" in query
+
+    def __replace_position_parameters_with_autoincrement(
+        self, query: str, parameters: list
+    ) -> str:
+        """Replace positional parameters with autoincrement."""
+        if len(parameters) > 9:
+            raise ValueError(
+                "Chakra DB does not support more than 8 positional parameters"
+            )
+        # find all $1, $2, $3, etc. and replace with ?, ?, ?, etc.
+        new_query = query
+        for i in range(len(parameters)):
+            new_query = new_query.replace(f"${i+1}", f"?")
+
+        # explode the parameters into a single list with duplicates aligned
+        new_parameters = []
+        # iterate over query, find the relevant index in parameters, then add the value to new_parameters
+        for i in range(len(query)):
+            if query[i] == "$":
+                index = int(query[i + 1])
+                # duckdb uses 1-indexed parameters, so we need to subtract 1
+                new_parameters.append(parameters[index - 1])
+
+        return new_query, new_parameters
+
+    def execute(self, query: str, parameters: list = []) -> pd.DataFrame:
         """Execute a query and return results as a pandas DataFrame."""
         if not self.token:
             raise ValueError("Authentication required")
@@ -206,11 +235,17 @@ class Chakra:
             bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} steps",
             colour="green",
         ) as pbar:
-
+            if self.__query_has_positional_parameters(query):
+                query, parameters = (
+                    self.__replace_position_parameters_with_autoincrement(
+                        query, parameters
+                    )
+                )
             pbar.set_description("Executing query...")
             try:
                 response = self._session.post(
-                    f"{BASE_URL}/api/v1/query", json={"sql": query}
+                    f"{BASE_URL}/api/v1/query",
+                    json={"sql": query, "parameters": parameters},
                 )
                 response.raise_for_status()
             except Exception as e:
