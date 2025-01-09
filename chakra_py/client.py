@@ -14,6 +14,32 @@ DEFAULT_BATCH_SIZE = 1000
 TOKEN_PREFIX = "DDB_"
 
 
+def ensure_authenticated(func):
+    """Decorator to ensure the client is authenticated before executing a method."""
+
+    def wrapper(self, *args, **kwargs):
+        max_attempts = 3
+        attempt = 0
+
+        while attempt < max_attempts:
+            if not self.token:
+                self.login()
+            try:
+                return func(self, *args, **kwargs)
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 401:
+                    attempt += 1
+                    print(
+                        f"Attempt {attempt} failed with 401. Stale token. Attempting login..."
+                    )
+                    self.login()
+                else:
+                    raise
+        raise ChakraAPIError("Failed to authenticate after 3 attempts.")
+
+    return wrapper
+
+
 class Chakra:
     """Main client for interacting with the Chakra API.
 
@@ -124,6 +150,7 @@ class Chakra:
         )
         response.raise_for_status()
 
+    @ensure_authenticated
     def push(
         self,
         table_name: str,
@@ -224,6 +251,7 @@ class Chakra:
 
         return new_query, new_parameters
 
+    @ensure_authenticated
     def execute(self, query: str, parameters: list = []) -> pd.DataFrame:
         """Execute a query and return results as a pandas DataFrame."""
         if not self.token:
@@ -242,14 +270,11 @@ class Chakra:
                     )
                 )
             pbar.set_description("Executing query...")
-            try:
-                response = self._session.post(
-                    f"{BASE_URL}/api/v1/query",
-                    json={"sql": query, "parameters": parameters},
-                )
-                response.raise_for_status()
-            except Exception as e:
-                self._handle_api_error(e)
+            response = self._session.post(
+                f"{BASE_URL}/api/v1/query",
+                json={"sql": query, "parameters": parameters},
+            )
+            response.raise_for_status()
             pbar.update(1)
 
             pbar.set_description("Processing results...")
