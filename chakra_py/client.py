@@ -96,7 +96,7 @@ class Chakra:
         """Drop existing table if replace_if_exists is True."""
         pbar.set_description(f"Replacing table...")
         response = self._session.post(
-            f"{BASE_URL}/api/v1/execute",
+            f"{BASE_URL}/api/v1/query",
             json={"sql": f"DROP TABLE IF EXISTS {table_name}"},
         )
         response.raise_for_status()
