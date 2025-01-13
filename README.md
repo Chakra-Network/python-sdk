@@ -26,9 +26,6 @@ import pandas as pd
 # Initialize client
 client = Chakra("YOUR_DB_SESSION_KEY")
 
-# REQUIRED: Authenticate and set the token
-client.login()
-
 # Query data (returns pandas DataFrame)
 df = client.execute("SELECT * FROM my_table")
 print(df.head())

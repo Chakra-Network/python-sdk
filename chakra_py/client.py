@@ -48,7 +48,6 @@ class Chakra:
 
     Example:
         >>> client = Chakra("DB_SESSION_KEY")
-        >>> client.login()
         >>> df = client.execute("SELECT * FROM table")
         >>> client.push("new_table", df)
     """
