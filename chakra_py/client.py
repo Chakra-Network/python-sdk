@@ -1,13 +1,18 @@
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 import requests
 from colorama import Fore, Style
 from tqdm import tqdm
-
+from io import BytesIO
+import uuid
+import time
 from .exceptions import ChakraAPIError
 
-BASE_URL = "https://api.chakra.dev".rstrip("/")
+# BASE_URL = "https://api.chakra.dev".rstrip("/")
+BASE_URL = "http://localhost:8080".rstrip("/")
 
 # Add constants at the top
 DEFAULT_BATCH_SIZE = 1000
@@ -148,25 +153,34 @@ class Chakra:
             json={"sql": insert_sql, "parameters": parameters},
         )
         response.raise_for_status()
+    
+    def _push_to_presigned_url(self, presigned_url: str, df: pd.DataFrame) -> None:
+        """
+        Upload a pandas DataFrame to S3 as a parquet file using a presigned URL.
+        
+        Args:
+            df: The pandas DataFrame to upload
+            presigned_url: The S3 presigned URL for uploading
+            
+        Returns:
+            bool: True if upload was successful, False otherwise
+        """
+        
 
     @ensure_authenticated
     def push(
         self,
         table_name: str,
-        data: Union[pd.DataFrame, Dict[str, Any]],
+        data: pd.DataFrame,
         create_if_missing: bool = True,
         replace_if_exists: bool = False,
-        batch_size: int = DEFAULT_BATCH_SIZE,
+        # batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
         """Push data to a table."""
         if not self.token:
             raise ValueError("Authentication required")
-
-        if not isinstance(data, pd.DataFrame):
-            raise NotImplementedError("Dictionary input not yet implemented")
-
-        records = data.to_dict(orient="records")
-        total_records = len(records)
+        
+        total_records = len(data)
 
         with tqdm(
             total=total_records,
@@ -181,14 +195,56 @@ class Chakra:
                 if create_if_missing or replace_if_exists:
                     self._create_table_schema(table_name, data, pbar)
 
-                if records:
-                    pbar.set_description(f"Preparing records...")
-                    for i in range(0, len(records), batch_size):
-                        batch = records[i : i + batch_size]
-                        self._process_batch(
-                            table_name, batch, i // batch_size + 1, pbar
-                        )
-                        pbar.update(len(batch))
+                uuid_str = str(uuid.uuid4())
+                filename = f"{table_name}_{uuid_str}.parquet"
+                response = self._session.get(
+                    f"{BASE_URL}/api/v1/presigned-upload?filename={filename}",
+                )
+                response.raise_for_status()
+                response_json = response.json()
+                presigned_url = response_json["presignedUrl"]
+
+                print(f"Response JSON: {response_json}")
+                print(f"Presigned URL: {presigned_url}")
+
+                base_file_url = presigned_url.split("?")[0]
+                print(f"Base file URL: {base_file_url}")
+
+                # Create a temporary file to write the parquet data
+                temp_file = BytesIO()
+                data.to_parquet(temp_file, engine='pyarrow', compression='zstd')
+                temp_file.seek(0)
+
+                start_time = time.time()
+
+                # Upload the temporary file using requests
+                response = requests.put(
+                    presigned_url,
+                    data=temp_file.getvalue(),
+                    headers={'Content-Type': 'application/parquet'}
+                )
+                response.raise_for_status()
+
+                print(f"Upload response: {response.status_code}")
+
+    
+
+                # Delete the temporary file
+                temp_file.close()
+
+                response = self._session.post(
+                    f"{BASE_URL}/api/v1/tables/s3_parquet_import",
+                    json={
+                        "table_name": table_name,
+                        "url": base_file_url,
+                    },
+                )
+                response.raise_for_status()
+
+                end_time = time.time()
+                print(f"Time taken: {end_time - start_time} seconds")
+
+                print(f"Upload response: {response.status_code}")
 
             except Exception as e:
                 self._handle_api_error(e)
