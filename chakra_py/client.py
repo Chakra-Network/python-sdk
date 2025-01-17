@@ -227,16 +227,13 @@ class Chakra:
 
                 print(f"Upload response: {response.status_code}")
 
-    
-
-                # Delete the temporary file
                 temp_file.close()
 
                 response = self._session.post(
                     f"{BASE_URL}/api/v1/tables/s3_parquet_import",
                     json={
                         "table_name": table_name,
-                        "url": base_file_url,
+                        "s3_key": f"uploads/{filename}",
                     },
                 )
                 response.raise_for_status()
