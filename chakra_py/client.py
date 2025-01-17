@@ -11,8 +11,7 @@ import uuid
 import time
 from .exceptions import ChakraAPIError
 
-# BASE_URL = "https://api.chakra.dev".rstrip("/")
-BASE_URL = "http://localhost:8080".rstrip("/")
+BASE_URL = "https://api.chakra.dev".rstrip("/")
 
 # Add constants at the top
 DEFAULT_BATCH_SIZE = 1000
