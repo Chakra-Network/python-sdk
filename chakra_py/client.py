@@ -1,21 +1,37 @@
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
 import requests
 from colorama import Fore, Style
 from tqdm import tqdm
-from io import BytesIO
+import tempfile
 import uuid
-import time
+import os
 from .exceptions import ChakraAPIError
 
-BASE_URL = "https://api.chakra.dev".rstrip("/")
+# BASE_URL = "https://api.chakra.dev".rstrip("/")
+BASE_URL = "http://localhost:8080".rstrip("/")
 
 # Add constants at the top
 DEFAULT_BATCH_SIZE = 1000
 TOKEN_PREFIX = "DDB_"
+
+class ProgressFileWrapper:
+    def __init__(self, file, total_size, tdqm):
+        self.file = file
+        self.progress_bar = tdqm
+        self._len = total_size
+
+    def read(self, size=-1):
+        data = self.file.read(size)
+        if data:
+            self.progress_bar.update(len(data))
+        elif data == b'':  # End of file reached
+            self.progress_bar.close()
+        return data
+
+    def __len__(self):
+        return self._len
 
 
 def ensure_authenticated(func):
@@ -180,12 +196,14 @@ class Chakra:
             raise ValueError("Authentication required")
         
         total_records = len(data)
-
+        
         with tqdm(
             total=total_records,
-            desc="Preparing data...",
-            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} records",
+            desc="Uploading data...",
+            bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
             colour="green",
+            unit='B',
+            unit_scale=True
         ) as pbar:
             try:
                 if replace_if_exists:
@@ -202,46 +220,35 @@ class Chakra:
                 response.raise_for_status()
                 response_json = response.json()
                 presigned_url = response_json["presignedUrl"]
-
-                print(f"Response JSON: {response_json}")
-                print(f"Presigned URL: {presigned_url}")
-
-                base_file_url = presigned_url.split("?")[0]
-                print(f"Base file URL: {base_file_url}")
+                s3_key = response_json["key"]
 
                 # Create a temporary file to write the parquet data
-                temp_file = BytesIO()
-                data.to_parquet(temp_file, engine='pyarrow', compression='zstd')
-                temp_file.seek(0)
+                with tempfile.NamedTemporaryFile() as temp_file:
+                    pbar.set_description("Converting data to parquet format...")
+                    data.to_parquet(temp_file.name, engine='pyarrow', compression='zstd')
+                    temp_file.seek(0)
+                    
+                    file_size = os.path.getsize(temp_file.name)
+                    progress_wrapper = ProgressFileWrapper(temp_file, file_size, pbar)
+                    
+                    response = requests.put(
+                        presigned_url,
+                        data=progress_wrapper,
+                        headers={'Content-Type': 'application/parquet'}
+                    )
+                    response.raise_for_status()
 
-                start_time = time.time()
-
-                # Upload the temporary file using requests
-                response = requests.put(
-                    presigned_url,
-                    data=temp_file.getvalue(),
-                    headers={'Content-Type': 'application/parquet'}
-                )
-                response.raise_for_status()
-
-                print(f"Upload response: {response.status_code}")
-
-                temp_file.close()
-
+                pbar.set_description("Importing data into warehouse...")
                 response = self._session.post(
                     f"{BASE_URL}/api/v1/tables/s3_parquet_import",
                     json={
                         "table_name": table_name,
-                        "s3_key": f"uploads/{filename}",
+                        "s3_key": s3_key,
                     },
                 )
                 response.raise_for_status()
-
-                end_time = time.time()
-                print(f"Time taken: {end_time - start_time} seconds")
-
-                print(f"Upload response: {response.status_code}")
-
+                pbar.set_description("Data import finished.")
+                
             except Exception as e:
                 self._handle_api_error(e)
 
@@ -320,7 +327,7 @@ class Chakra:
                         query, parameters
                     )
                 )
-            pbar.set_description("Executing query...")
+            pbar.write("Executing query...")
             response = self._session.post(
                 f"{BASE_URL}/api/v1/query",
                 json={"sql": query, "parameters": parameters},
@@ -335,6 +342,8 @@ class Chakra:
             pbar.set_description("Building DataFrame...")
             df = pd.DataFrame(data["rows"], columns=data["columns"])
             pbar.update(1)
+
+            pbar.set_description("Query execution finished.")
 
         print(f"{Fore.GREEN}✓ Query executed successfully!{Style.RESET_ALL}\n")
         return df
