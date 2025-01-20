@@ -1,3 +1,6 @@
+import os
+import tempfile
+import uuid
 from typing import Any, Dict, Optional, Union
 
 import pandas as pd
@@ -12,6 +15,22 @@ BASE_URL = "https://api.chakra.dev".rstrip("/")
 # Add constants at the top
 DEFAULT_BATCH_SIZE = 1000
 TOKEN_PREFIX = "DDB_"
+
+
+class ProgressFileWrapper:
+    def __init__(self, file, total_size, tdqm):
+        self.file = file
+        self.progress_bar = tdqm
+        self._len = total_size
+
+    def read(self, size=-1):
+        data = self.file.read(size)
+        if data:
+            self.progress_bar.update(len(data))
+        return data
+
+    def __len__(self):
+        return self._len
 
 
 def ensure_authenticated(func):
@@ -149,49 +168,116 @@ class Chakra:
         )
         response.raise_for_status()
 
+    def _push_to_presigned_url(self, presigned_url: str, df: pd.DataFrame) -> None:
+        """
+        Upload a pandas DataFrame to S3 as a parquet file using a presigned URL.
+
+        Args:
+            df: The pandas DataFrame to upload
+            presigned_url: The S3 presigned URL for uploading
+
+        Returns:
+            bool: True if upload was successful, False otherwise
+        """
+
+    def _request_presigned_url(self, file_name: str) -> dict:
+        """Request a presigned URL for the upload."""
+        response = self._session.get(
+            f"{BASE_URL}/api/v1/presigned-upload?filename={file_name}",
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def _upload_parquet_using_presigned_url(
+        self, presigned_url: str, file: str, file_size: int, pbar: tqdm
+    ) -> None:
+        """Upload a parquet file to S3 using a presigned URL."""
+        progress_wrapper = ProgressFileWrapper(file, file_size, pbar)
+
+        pbar.set_description("Uploading data...")
+        response = requests.put(
+            presigned_url,
+            data=progress_wrapper,
+            headers={"Content-Type": "application/parquet"},
+        )
+        response.raise_for_status()
+
+    def _import_data_from_presigned_url(self, table_name: str, s3_key: str) -> None:
+        """Import data from a presigned URL into a table."""
+        response = self._session.post(
+            f"{BASE_URL}/api/v1/tables/s3_parquet_import",
+            json={"table_name": table_name, "s3_key": s3_key},
+        )
+        response.raise_for_status()
+
+    def _delete_file_from_s3(self, s3_key: str) -> None:
+        """Delete a file from S3."""
+        response = self._session.delete(
+            f"{BASE_URL}/api/v1/files",
+            json={"fileName": s3_key},
+        )
+        response.raise_for_status()
+
     @ensure_authenticated
     def push(
         self,
         table_name: str,
-        data: Union[pd.DataFrame, Dict[str, Any]],
+        data: pd.DataFrame,
         create_if_missing: bool = True,
         replace_if_exists: bool = False,
-        batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
         """Push data to a table."""
         if not self.token:
             raise ValueError("Authentication required")
 
-        if not isinstance(data, pd.DataFrame):
-            raise NotImplementedError("Dictionary input not yet implemented")
+        total_records = len(data)
 
-        records = data.to_dict(orient="records")
-        total_records = len(records)
+        with tempfile.NamedTemporaryFile() as temp_file:
+            data.to_parquet(temp_file.name, engine="pyarrow", compression="zstd")
+            file_size = os.path.getsize(temp_file.name)
 
-        with tqdm(
-            total=total_records,
-            desc="Preparing data...",
-            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} records",
-            colour="green",
-        ) as pbar:
-            try:
-                if replace_if_exists:
-                    self._replace_existing_table(table_name, pbar)
+            with tqdm(
+                total=file_size + 2,
+                desc="Uploading data...",
+                bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+                colour="green",
+                unit="B",
+                unit_scale=True,
+            ) as pbar:
+                try:
+                    if replace_if_exists:
+                        self._replace_existing_table(table_name, pbar)
 
-                if create_if_missing or replace_if_exists:
-                    self._create_table_schema(table_name, data, pbar)
+                    if create_if_missing or replace_if_exists:
+                        self._create_table_schema(table_name, data, pbar)
 
-                if records:
-                    pbar.set_description(f"Preparing records...")
-                    for i in range(0, len(records), batch_size):
-                        batch = records[i : i + batch_size]
-                        self._process_batch(
-                            table_name, batch, i // batch_size + 1, pbar
-                        )
-                        pbar.update(len(batch))
+                    # Request a presigned URL for the upload
+                    uuid_str = str(uuid.uuid4())
+                    filename = f"{table_name}_{uuid_str}.parquet"
+                    response = self._request_presigned_url(filename)
+                    presigned_url = response["presignedUrl"]
+                    s3_key = response["key"]
 
-            except Exception as e:
-                self._handle_api_error(e)
+                    # Upload the data to the presigned URL
+                    temp_file.seek(0)
+                    self._upload_parquet_using_presigned_url(
+                        presigned_url, temp_file, file_size, pbar
+                    )
+
+                    # Import the data into the warehouse from the presigned URL
+                    pbar.set_description("Importing data into warehouse...")
+                    self._import_data_from_presigned_url(table_name, s3_key)
+                    pbar.update(1)
+
+                    # Clean up the data that was previously uploaded
+                    pbar.set_description("Cleaning up...")
+                    self._delete_file_from_s3(s3_key)
+                    pbar.update(1)
+
+                    pbar.set_description("Data import finished.")
+
+                except Exception as e:
+                    self._handle_api_error(e)
 
         print(
             f"{Fore.GREEN}✓ Successfully pushed {total_records} records to {table_name}!{Style.RESET_ALL}\n"
@@ -283,6 +369,8 @@ class Chakra:
             pbar.set_description("Building DataFrame...")
             df = pd.DataFrame(data["rows"], columns=data["columns"])
             pbar.update(1)
+
+            pbar.set_description("Query execution finished.")
 
         print(f"{Fore.GREEN}✓ Query executed successfully!{Style.RESET_ALL}\n")
         return df
