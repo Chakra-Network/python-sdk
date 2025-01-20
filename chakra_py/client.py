@@ -212,6 +212,7 @@ class Chakra:
                     if create_if_missing or replace_if_exists:
                         self._create_table_schema(table_name, data, pbar)
 
+                    # Request a presigned URL for the upload
                     uuid_str = str(uuid.uuid4())
                     filename = f"{table_name}_{uuid_str}.parquet"
                     response = self._session.get(
@@ -222,6 +223,7 @@ class Chakra:
                     presigned_url = response_json["presignedUrl"]
                     s3_key = response_json["key"]
 
+                    # Upload the data to the presigned URL
                     temp_file.seek(0)
                     progress_wrapper = ProgressFileWrapper(temp_file, file_size, pbar)
                     
@@ -233,6 +235,7 @@ class Chakra:
                     )
                     response.raise_for_status()
 
+                    # Import the data into the warehouse from the presigned URL
                     pbar.set_description("Importing data into warehouse...")
                     response = self._session.post(
                         f"{BASE_URL}/api/v1/tables/s3_parquet_import",
@@ -244,6 +247,7 @@ class Chakra:
                     response.raise_for_status()
                     pbar.update(1)
 
+                    # Clean up the data that was previously uploaded
                     pbar.set_description("Cleaning up...")
                     response = self._session.delete(
                         f"{BASE_URL}/api/v1/files",
