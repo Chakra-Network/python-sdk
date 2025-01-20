@@ -19,8 +19,10 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install Poetry using get-poetry.py
-      run: curl -sSL https://install.python-poetry.org | python3 -
+    - name: Install and configure Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: 1.5.1
     - name: Install dependencies
       run: poetry install
     - name: Run tests with pytest
