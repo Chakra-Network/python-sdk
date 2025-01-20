@@ -177,7 +177,42 @@ class Chakra:
         Returns:
             bool: True if upload was successful, False otherwise
         """
+
+    def _request_presigned_url(self, file_name: str) -> dict:
+        """Request a presigned URL for the upload."""
+        response = self._session.get(
+            f"{BASE_URL}/api/v1/presigned-upload?filename={file_name}",
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def _upload_parquet_using_presigned_url(self, presigned_url: str, file: str, file_size: int, pbar: tqdm) -> None:
+        """Upload a parquet file to S3 using a presigned URL."""
+        progress_wrapper = ProgressFileWrapper(file, file_size, pbar)
         
+        pbar.set_description("Uploading data...")
+        response = requests.put(
+            presigned_url,
+            data=progress_wrapper,
+            headers={'Content-Type': 'application/parquet'}
+        )
+        response.raise_for_status()
+
+    def _import_data_from_presigned_url(self, table_name: str, s3_key: str) -> None:
+        """Import data from a presigned URL into a table."""
+        response = self._session.post(
+            f"{BASE_URL}/api/v1/tables/s3_parquet_import",
+            json={"table_name": table_name, "s3_key": s3_key},
+        )
+        response.raise_for_status()
+
+    def _delete_file_from_s3(self, s3_key: str) -> None:
+        """Delete a file from S3."""
+        response = self._session.delete(
+            f"{BASE_URL}/api/v1/files",
+            json={"fileName": s3_key},
+        )
+        response.raise_for_status()
 
     @ensure_authenticated
     def push(
@@ -215,47 +250,22 @@ class Chakra:
                     # Request a presigned URL for the upload
                     uuid_str = str(uuid.uuid4())
                     filename = f"{table_name}_{uuid_str}.parquet"
-                    response = self._session.get(
-                        f"{BASE_URL}/api/v1/presigned-upload?filename={filename}",
-                    )
-                    response.raise_for_status()
-                    response_json = response.json()
-                    presigned_url = response_json["presignedUrl"]
-                    s3_key = response_json["key"]
+                    response = self._request_presigned_url(filename)
+                    presigned_url = response["presignedUrl"]
+                    s3_key = response["key"]
 
                     # Upload the data to the presigned URL
                     temp_file.seek(0)
-                    progress_wrapper = ProgressFileWrapper(temp_file, file_size, pbar)
-                    
-                    pbar.set_description("Uploading data...")
-                    response = requests.put(
-                        presigned_url,
-                        data=progress_wrapper,
-                        headers={'Content-Type': 'application/parquet'}
-                    )
-                    response.raise_for_status()
+                    self._upload_parquet_using_presigned_url(presigned_url, temp_file, file_size, pbar)
 
                     # Import the data into the warehouse from the presigned URL
                     pbar.set_description("Importing data into warehouse...")
-                    response = self._session.post(
-                        f"{BASE_URL}/api/v1/tables/s3_parquet_import",
-                        json={
-                            "table_name": table_name,
-                            "s3_key": s3_key,
-                        },
-                    )
-                    response.raise_for_status()
+                    self._import_data_from_presigned_url(table_name, s3_key)
                     pbar.update(1)
 
                     # Clean up the data that was previously uploaded
                     pbar.set_description("Cleaning up...")
-                    response = self._session.delete(
-                        f"{BASE_URL}/api/v1/files",
-                        json={
-                            "fileName": s3_key,
-                        },
-                    )
-                    response.raise_for_status()
+                    self._delete_file_from_s3(s3_key)
                     pbar.update(1)
 
                     pbar.set_description("Data import finished.")
