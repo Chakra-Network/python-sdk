@@ -26,8 +26,6 @@ class ProgressFileWrapper:
         data = self.file.read(size)
         if data:
             self.progress_bar.update(len(data))
-        elif data == b'':  # End of file reached
-            self.progress_bar.close()
         return data
 
     def __len__(self):
