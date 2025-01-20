@@ -1,11 +1,9 @@
 # Chakra SDK
 
 [![PyPI version](https://badge.fury.io/py/chakra-py.svg)](https://badge.fury.io/py/chakra-py)
-[![Build Status](https://github.com/Chakra-Network/python-sdk/actions/workflows/tests.yml/badge.svg)](https://github.com/Chakra-Network/python-sdk/actions?query=workflow%3Atests)
-[![Coverage Status](https://coveralls.io/repos/github/Chakra-Network/python-sdk/badge.svg?branch=main)](https://coveralls.io/github/Chakra-Network/python-sdk?branch=main)
+[![Build Status](https://github.com/Chakra-Network/python-sdk/actions/workflows/test.yml/badge.svg)](https://github.com/Chakra-Network/python-sdk/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python versions](https://img.shields.io/pypi/pyversions/chakra-py.svg)](https://pypi.org/project/chakra-py/)
-
 
 
 ![Chakra Banner](https://github.com/Chakra-Network/python-sdk/blob/8c0b9c94a889562e7c9010e4d8bbc6894c1653ae/banner.png?raw=True)
