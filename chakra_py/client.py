@@ -186,7 +186,6 @@ class Chakra:
         data: pd.DataFrame,
         create_if_missing: bool = True,
         replace_if_exists: bool = False,
-        # batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
         """Push data to a table."""
         if not self.token:
