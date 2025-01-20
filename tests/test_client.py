@@ -71,7 +71,7 @@ def test_query_execution(mock_session):
     assert len(df) == 2
 
 
-@patch("uuid.uuid4") 
+@patch("uuid.uuid4")
 @patch("requests.put")
 @patch("requests.Session")
 def test_data_push(mock_session, mock_requests_put, mock_uuid4):
@@ -89,8 +89,8 @@ def test_data_push(mock_session, mock_requests_put, mock_uuid4):
     mock_presigned_response = Mock()
     mock_presigned_response.json.return_value = {
         "presignedUrl": "https://fake-s3-url.com",
-        "key": "fake-s3-key"
-    }   
+        "key": "fake-s3-key",
+    }
     mock_session.return_value.get.return_value = mock_presigned_response
 
     # Set up all mock responses in the correct order
@@ -117,7 +117,11 @@ def test_data_push(mock_session, mock_requests_put, mock_uuid4):
 
     # 1. Verify the presigned URL GET request
     presigned_get_call = mock_session.return_value.get.call_args
-    assert presigned_get_call[0][0] == "https://api.chakra.dev/api/v1/presigned-upload?filename=test_table_{}.parquet".format(mock_uuid)
+    assert presigned_get_call[0][
+        0
+    ] == "https://api.chakra.dev/api/v1/presigned-upload?filename=test_table_{}.parquet".format(
+        mock_uuid
+    )
 
     # 2. Verify the S3 upload was called with correct parameters
     mock_requests_put.assert_called_once()
@@ -138,7 +142,7 @@ def test_data_push(mock_session, mock_requests_put, mock_uuid4):
     assert import_call[0][0] == "https://api.chakra.dev/api/v1/tables/s3_parquet_import"
     assert import_call[1]["json"] == {
         "table_name": "test_table",
-        "s3_key": "fake-s3-key"
+        "s3_key": "fake-s3-key",
     }
 
     # 5. Verify cleanup was called
