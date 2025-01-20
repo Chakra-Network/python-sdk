@@ -15,6 +15,7 @@ BASE_URL = "https://api.chakra.dev".rstrip("/")
 DEFAULT_BATCH_SIZE = 1000
 TOKEN_PREFIX = "DDB_"
 
+
 class ProgressFileWrapper:
     def __init__(self, file, total_size, tdqm):
         self.file = file
@@ -165,15 +166,15 @@ class Chakra:
             json={"sql": insert_sql, "parameters": parameters},
         )
         response.raise_for_status()
-    
+
     def _push_to_presigned_url(self, presigned_url: str, df: pd.DataFrame) -> None:
         """
         Upload a pandas DataFrame to S3 as a parquet file using a presigned URL.
-        
+
         Args:
             df: The pandas DataFrame to upload
             presigned_url: The S3 presigned URL for uploading
-            
+
         Returns:
             bool: True if upload was successful, False otherwise
         """
@@ -186,15 +187,17 @@ class Chakra:
         response.raise_for_status()
         return response.json()
 
-    def _upload_parquet_using_presigned_url(self, presigned_url: str, file: str, file_size: int, pbar: tqdm) -> None:
+    def _upload_parquet_using_presigned_url(
+        self, presigned_url: str, file: str, file_size: int, pbar: tqdm
+    ) -> None:
         """Upload a parquet file to S3 using a presigned URL."""
         progress_wrapper = ProgressFileWrapper(file, file_size, pbar)
-        
+
         pbar.set_description("Uploading data...")
         response = requests.put(
             presigned_url,
             data=progress_wrapper,
-            headers={'Content-Type': 'application/parquet'}
+            headers={"Content-Type": "application/parquet"},
         )
         response.raise_for_status()
 
@@ -225,20 +228,20 @@ class Chakra:
         """Push data to a table."""
         if not self.token:
             raise ValueError("Authentication required")
-        
+
         total_records = len(data)
-         
+
         with tempfile.NamedTemporaryFile() as temp_file:
-            data.to_parquet(temp_file.name, engine='pyarrow', compression='zstd')
+            data.to_parquet(temp_file.name, engine="pyarrow", compression="zstd")
             file_size = os.path.getsize(temp_file.name)
-        
+
             with tqdm(
                 total=file_size + 2,
                 desc="Uploading data...",
                 bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
                 colour="green",
-                unit='B',
-                unit_scale=True
+                unit="B",
+                unit_scale=True,
             ) as pbar:
                 try:
                     if replace_if_exists:
@@ -256,7 +259,9 @@ class Chakra:
 
                     # Upload the data to the presigned URL
                     temp_file.seek(0)
-                    self._upload_parquet_using_presigned_url(presigned_url, temp_file, file_size, pbar)
+                    self._upload_parquet_using_presigned_url(
+                        presigned_url, temp_file, file_size, pbar
+                    )
 
                     # Import the data into the warehouse from the presigned URL
                     pbar.set_description("Importing data into warehouse...")
