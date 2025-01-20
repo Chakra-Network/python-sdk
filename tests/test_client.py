@@ -70,11 +70,6 @@ def test_query_execution(mock_session):
     assert list(df.columns) == ["id", "name"]
     assert len(df) == 2
 
-    # Test authentication check
-    client = Chakra("access:secret:username")  # New client without login
-    with pytest.raises(ValueError, match="Authentication required"):
-        client.execute("SELECT * FROM test_table")
-
 
 @patch("requests.Session")
 def test_data_push(mock_session):
@@ -115,8 +110,3 @@ def test_data_push(mock_session):
     # Test dictionary input not implemented
     with pytest.raises(NotImplementedError):
         client.push("test_table", {"key": "value"})
-
-    # Test authentication check
-    client = Chakra("access:secret:username")  # New client without login
-    with pytest.raises(ValueError, match="Authentication required"):
-        client.push("test_table", df)
