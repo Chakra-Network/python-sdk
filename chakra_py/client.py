@@ -250,8 +250,8 @@ class Chakra:
 
                     pbar.set_description("Cleaning up...")
                     response = self._session.delete(
-                        f"{BASE_URL}/api/v1/files/",
-                        data={
+                        f"{BASE_URL}/api/v1/files",
+                        json={
                             "fileName": s3_key,
                         },
                     )
