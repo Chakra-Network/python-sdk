@@ -4,7 +4,7 @@ from colorama import Fore, Style
 
 from .client import Chakra
 
-__version__ = "1.0.11"
+__version__ = "1.0.12"
 __all__ = ["Chakra"]
 
 BANNER = rf"""{Fore.GREEN}
