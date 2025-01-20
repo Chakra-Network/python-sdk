@@ -196,41 +196,40 @@ class Chakra:
             raise ValueError("Authentication required")
         
         total_records = len(data)
+         
+        with tempfile.NamedTemporaryFile() as temp_file:
+            data.to_parquet(temp_file.name, engine='pyarrow', compression='zstd')
+            file_size = os.path.getsize(temp_file.name)
         
-        with tqdm(
-            total=total_records,
-            desc="Uploading data...",
-            bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-            colour="green",
-            unit='B',
-            unit_scale=True
-        ) as pbar:
-            try:
-                if replace_if_exists:
-                    self._replace_existing_table(table_name, pbar)
+            with tqdm(
+                total=file_size + 2,
+                desc="Uploading data...",
+                bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+                colour="green",
+                unit='B',
+                unit_scale=True
+            ) as pbar:
+                try:
+                    if replace_if_exists:
+                        self._replace_existing_table(table_name, pbar)
 
-                if create_if_missing or replace_if_exists:
-                    self._create_table_schema(table_name, data, pbar)
+                    if create_if_missing or replace_if_exists:
+                        self._create_table_schema(table_name, data, pbar)
 
-                uuid_str = str(uuid.uuid4())
-                filename = f"{table_name}_{uuid_str}.parquet"
-                response = self._session.get(
-                    f"{BASE_URL}/api/v1/presigned-upload?filename={filename}",
-                )
-                response.raise_for_status()
-                response_json = response.json()
-                presigned_url = response_json["presignedUrl"]
-                s3_key = response_json["key"]
+                    uuid_str = str(uuid.uuid4())
+                    filename = f"{table_name}_{uuid_str}.parquet"
+                    response = self._session.get(
+                        f"{BASE_URL}/api/v1/presigned-upload?filename={filename}",
+                    )
+                    response.raise_for_status()
+                    response_json = response.json()
+                    presigned_url = response_json["presignedUrl"]
+                    s3_key = response_json["key"]
 
-                # Create a temporary file to write the parquet data
-                with tempfile.NamedTemporaryFile() as temp_file:
-                    pbar.set_description("Converting data to parquet format...")
-                    data.to_parquet(temp_file.name, engine='pyarrow', compression='zstd')
                     temp_file.seek(0)
-                    
-                    file_size = os.path.getsize(temp_file.name)
                     progress_wrapper = ProgressFileWrapper(temp_file, file_size, pbar)
                     
+                    pbar.set_description("Uploading data...")
                     response = requests.put(
                         presigned_url,
                         data=progress_wrapper,
@@ -238,19 +237,31 @@ class Chakra:
                     )
                     response.raise_for_status()
 
-                pbar.set_description("Importing data into warehouse...")
-                response = self._session.post(
-                    f"{BASE_URL}/api/v1/tables/s3_parquet_import",
-                    json={
-                        "table_name": table_name,
-                        "s3_key": s3_key,
-                    },
-                )
-                response.raise_for_status()
-                pbar.set_description("Data import finished.")
-                
-            except Exception as e:
-                self._handle_api_error(e)
+                    pbar.set_description("Importing data into warehouse...")
+                    response = self._session.post(
+                        f"{BASE_URL}/api/v1/tables/s3_parquet_import",
+                        json={
+                            "table_name": table_name,
+                            "s3_key": s3_key,
+                        },
+                    )
+                    response.raise_for_status()
+                    pbar.update(1)
+
+                    pbar.set_description("Cleaning up...")
+                    response = self._session.delete(
+                        f"{BASE_URL}/api/v1/files/",
+                        data={
+                            "fileName": s3_key,
+                        },
+                    )
+                    response.raise_for_status()
+                    pbar.update(1)
+
+                    pbar.set_description("Data import finished.")
+
+                except Exception as e:
+                    self._handle_api_error(e)
 
         print(
             f"{Fore.GREEN}✓ Successfully pushed {total_records} records to {table_name}!{Style.RESET_ALL}\n"
@@ -327,7 +338,7 @@ class Chakra:
                         query, parameters
                     )
                 )
-            pbar.write("Executing query...")
+            pbar.set_description("Executing query...")
             response = self._session.post(
                 f"{BASE_URL}/api/v1/query",
                 json={"sql": query, "parameters": parameters},
