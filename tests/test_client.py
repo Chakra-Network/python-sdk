@@ -71,9 +71,14 @@ def test_query_execution(mock_session):
     assert len(df) == 2
 
 
+@patch("uuid.uuid4") 
+@patch("requests.put")
 @patch("requests.Session")
-def test_data_push(mock_session):
+def test_data_push(mock_session, mock_requests_put, mock_uuid4):
     """Test data push functionality."""
+    mock_uuid = "fake-uuid-1234"
+    mock_uuid4.return_value = mock_uuid
+
     # Initialize headers dictionary
     mock_session.return_value.headers = {}
 
@@ -81,12 +86,24 @@ def test_data_push(mock_session):
     mock_auth_response = Mock()
     mock_auth_response.json.return_value = {"token": "DDB_test123"}
 
+    mock_presigned_response = Mock()
+    mock_presigned_response.json.return_value = {
+        "presignedUrl": "https://fake-s3-url.com",
+        "key": "fake-s3-key"
+    }   
+    mock_session.return_value.get.return_value = mock_presigned_response
+
     # Set up all mock responses in the correct order
     mock_session.return_value.post.side_effect = [
         mock_auth_response,  # For login
         Mock(status_code=200),  # For create table
         Mock(status_code=200),  # For batch insert
+        mock_presigned_response,  # For presigned URL
+        Mock(status_code=200),  # For import
+        Mock(status_code=200),  # For delete
     ]
+
+    mock_requests_put.return_value = Mock(status_code=200)
 
     # Create test DataFrame
     df = pd.DataFrame({"id": [1, 2], "name": ["test1", "test2"]})
@@ -98,15 +115,33 @@ def test_data_push(mock_session):
     # Now test pushing data
     client.push("test_table", df)
 
-    # Verify create table request
-    create_call = mock_session.return_value.post.call_args_list[1]
-    assert create_call[0][0] == "https://api.chakra.dev/api/v1/query"
-    assert "CREATE TABLE IF NOT EXISTS test_table" in create_call[1]["json"]["sql"]
+    # 1. Verify the presigned URL GET request
+    presigned_get_call = mock_session.return_value.get.call_args
+    assert presigned_get_call[0][0] == "https://api.chakra.dev/api/v1/presigned-upload?filename=test_table_{}.parquet".format(mock_uuid)
 
-    # Verify batch insert request
-    insert_call = mock_session.return_value.post.call_args_list[2]
-    assert insert_call[0][0] == "https://api.chakra.dev/api/v1/query"
+    # 2. Verify the S3 upload was called with correct parameters
+    mock_requests_put.assert_called_once()
+    put_args = mock_requests_put.call_args
+    assert put_args[0][0] == "https://fake-s3-url.com"
+    assert put_args[1]["headers"] == {"Content-Type": "application/parquet"}
+    assert "data" in put_args[1]
 
-    # Test dictionary input not implemented
-    with pytest.raises(NotImplementedError):
-        client.push("test_table", {"key": "value"})
+    # 3. Verify the create table request
+    import_call = mock_session.return_value.post.call_args_list[1]
+    assert import_call[0][0] == "https://api.chakra.dev/api/v1/query"
+    assert import_call[1]["json"] == {
+        "sql": "CREATE TABLE IF NOT EXISTS test_table (id BIGINT, name VARCHAR)"
+    }
+
+    # 4. Verify the import request
+    import_call = mock_session.return_value.post.call_args_list[2]
+    assert import_call[0][0] == "https://api.chakra.dev/api/v1/tables/s3_parquet_import"
+    assert import_call[1]["json"] == {
+        "table_name": "test_table",
+        "s3_key": "fake-s3-key"
+    }
+
+    # 5. Verify cleanup was called
+    delete_call = mock_session.return_value.delete.call_args
+    assert delete_call[0][0] == "https://api.chakra.dev/api/v1/files"
+    assert delete_call[1]["json"] == {"fileName": "fake-s3-key"}
