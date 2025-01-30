@@ -23,6 +23,14 @@ A Python SDK for interacting with the Chakra API. This SDK provides seamless int
 pip install chakra-py
 ```
 
+## Finding your DB Session Key
+
+1. Login to the [Chakra Console](https://console.chakra.dev/)
+2. Select Settings
+3. Navigate to the releveant database and copy the DB Session Key (not the access key or secret access key)
+
+https://github.com/user-attachments/assets/9f1c1ab8-cb87-42a1-8627-184617bbb7d7
+
 ## Quick Start
 
 ```python
