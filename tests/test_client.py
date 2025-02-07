@@ -163,4 +163,3 @@ def test_data_push(mock_session, mock_requests_put, mock_uuid4):
     delete_call = mock_session.return_value.delete.call_args
     assert delete_call[0][0] == "https://api.chakra.dev/api/v1/files"
     assert delete_call[1]["json"] == {"fileName": "fake-s3-key"}
-
