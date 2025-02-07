@@ -96,6 +96,8 @@ def test_data_push(mock_session, mock_requests_put, mock_uuid4):
     # Set up all mock responses in the correct order
     mock_session.return_value.post.side_effect = [
         mock_auth_response,  # For login
+        Mock(status_code=200),  # For create database
+        Mock(status_code=200),  # For create schema
         Mock(status_code=200),  # For create table
         Mock(status_code=200),  # For batch insert
         mock_presigned_response,  # For presigned URL
@@ -113,13 +115,13 @@ def test_data_push(mock_session, mock_requests_put, mock_uuid4):
     client.login()  # This will consume the first mock response
 
     # Now test pushing data
-    client.push("test_table", df)
+    client.push("test_database.test_schema.test_table", df)
 
     # 1. Verify the presigned URL GET request
     presigned_get_call = mock_session.return_value.get.call_args
     assert presigned_get_call[0][
         0
-    ] == "https://api.chakra.dev/api/v1/presigned-upload?filename=test_table_{}.parquet".format(
+    ] == "https://api.chakra.dev/api/v1/presigned-upload?filename=test_database.test_schema.test_table_{}.parquet".format(
         mock_uuid
     )
 
@@ -130,22 +132,34 @@ def test_data_push(mock_session, mock_requests_put, mock_uuid4):
     assert put_args[1]["headers"] == {"Content-Type": "application/parquet"}
     assert "data" in put_args[1]
 
-    # 3. Verify the create table request
-    import_call = mock_session.return_value.post.call_args_list[1]
-    assert import_call[0][0] == "https://api.chakra.dev/api/v1/query"
-    assert import_call[1]["json"] == {
-        "sql": "CREATE TABLE IF NOT EXISTS test_table (id BIGINT, name VARCHAR)"
+    # 3. Verify the create database request
+    create_db_call = mock_session.return_value.post.call_args_list[1]
+    assert create_db_call[0][0] == "https://api.chakra.dev/api/v1/databases"
+    assert create_db_call[1]["json"] == {"name": "test_database"}
+
+    # 4. Verify the create schema request
+    create_schema_call = mock_session.return_value.post.call_args_list[2]
+    assert create_schema_call[0][0] == "https://api.chakra.dev/api/v1/query"
+    assert create_schema_call[1]["json"] == {
+        "sql": "CREATE SCHEMA IF NOT EXISTS test_database.test_schema"
     }
 
-    # 4. Verify the import request
-    import_call = mock_session.return_value.post.call_args_list[2]
+    # 5. Verify the create table request
+    create_table_call = mock_session.return_value.post.call_args_list[3]
+    assert create_table_call[0][0] == "https://api.chakra.dev/api/v1/query"
+    assert create_table_call[1]["json"] == {
+        "sql": "CREATE TABLE IF NOT EXISTS test_database.test_schema.test_table (id BIGINT, name VARCHAR)"
+    }
+
+    # 6. Verify the import request
+    import_call = mock_session.return_value.post.call_args_list[4]
     assert import_call[0][0] == "https://api.chakra.dev/api/v1/tables/s3_parquet_import"
     assert import_call[1]["json"] == {
-        "table_name": "test_table",
+        "table_name": "test_database.test_schema.test_table",
         "s3_key": "fake-s3-key",
     }
 
-    # 5. Verify cleanup was called
+    # 7. Verify cleanup was called
     delete_call = mock_session.return_value.delete.call_args
     assert delete_call[0][0] == "https://api.chakra.dev/api/v1/files"
     assert delete_call[1]["json"] == {"fileName": "fake-s3-key"}

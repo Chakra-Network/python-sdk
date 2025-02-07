@@ -118,6 +118,26 @@ class Chakra:
         response.raise_for_status()
         return response.json()["token"]
 
+    def _create_database_and_schema(self, table_name: str, pbar: tqdm) -> None:
+        """Create database, schema, and table if they don't exist."""
+        pbar.set_description("Creating database if it doesn't exist...")
+        [database_name, schema_name, _] = table_name.split(".")
+        response = self._session.post(
+            f"{BASE_URL}/api/v1/databases",
+            json={"name": database_name},
+        )
+        if response.status_code != 409:
+            # only raise error if the database doesn't already exist
+            response.raise_for_status()
+
+        pbar.set_description(f"Creating schema {schema_name} if it doesn't exist...")
+
+        create_sql = f"CREATE SCHEMA IF NOT EXISTS {database_name}.{schema_name}"
+        response = self._session.post(
+            f"{BASE_URL}/api/v1/query", json={"sql": create_sql}
+        )
+        response.raise_for_status()
+
     def _create_table_schema(
         self, table_name: str, data: pd.DataFrame, pbar: tqdm
     ) -> None:
@@ -233,7 +253,12 @@ class Chakra:
         total_records = len(data)
 
         with tempfile.NamedTemporaryFile() as temp_file:
-            data.to_parquet(temp_file.name, engine="pyarrow", compression="zstd")
+            data.to_parquet(
+                temp_file.name,
+                engine="pyarrow",
+                compression="zstd",
+                index=False,
+            )
             file_size = os.path.getsize(temp_file.name)
 
             with tqdm(
@@ -245,6 +270,9 @@ class Chakra:
                 unit_scale=True,
             ) as pbar:
                 try:
+                    if create_if_missing or replace_if_exists:
+                        self._create_database_and_schema(table_name, pbar)
+
                     if replace_if_exists:
                         self._replace_existing_table(table_name, pbar)
 
