@@ -1,4 +1,4 @@
-# Chakra SDK
+# Chakra Python SDK
 
 [![PyPI version](https://badge.fury.io/py/chakra-py.svg)](https://badge.fury.io/py/chakra-py)
 [![Build Status](https://github.com/Chakra-Network/python-sdk/actions/workflows/test.yml/badge.svg)](https://github.com/Chakra-Network/python-sdk/actions/workflows/test.yml)
@@ -6,7 +6,8 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/chakra-py.svg)](https://pypi.org/project/chakra-py/)
 
 
-![Chakra Banner](https://github.com/Chakra-Network/python-sdk/blob/8c0b9c94a889562e7c9010e4d8bbc6894c1653ae/banner.png?raw=True)
+![python_sdk](https://github.com/user-attachments/assets/d87bdee1-62b0-4ed8-b8ad-ec63c261a2ab)
+
 
 A Python SDK for interacting with the Chakra API. This SDK provides seamless integration with pandas DataFrames for data querying and manipulation.
 
