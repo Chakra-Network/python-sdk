@@ -11,10 +11,24 @@ from tqdm import tqdm
 from .exceptions import ChakraAPIError
 
 BASE_URL = "https://api.chakra.dev".rstrip("/")
-
-# Add constants at the top
 DEFAULT_BATCH_SIZE = 1000
 TOKEN_PREFIX = "DDB_"
+
+
+__version__ = "1.0.17"
+__all__ = ["Chakra"]
+
+BANNER = rf"""{Fore.GREEN}
+ _____ _           _               ________   __
+/  __ \ |         | |              | ___ \ \ / /
+| /  \/ |__   __ _| | ___ __ __ _  | |_/ /\ V / 
+| |   | '_ \ / _` | |/ / '__/ _` | |  __/  \ /  
+| \__/\ | | | (_| |   <| | | (_| | | |     | |  
+ \____/_| |_|\__,_|_|\_\_|  \__,_| \_|     \_/  
+{Style.RESET_ALL}
+                                   
+Python SDK v{__version__}
+"""
 
 
 class ProgressFileWrapper:
@@ -74,15 +88,21 @@ class Chakra:
     def __init__(
         self,
         db_session_key: str,
+        quiet: bool = False,
     ):
         """Initialize the Chakra client.
 
         Args:
             db_session_key: The DB session key to use - can be found in the Chakra Settings page
+            quiet: If True, suppresses all stdout messages (default: False)
         """
         self._db_session_key = db_session_key
         self._token = None
         self._session = requests.Session()
+        self._quiet = quiet
+
+        if not quiet:
+            print(BANNER.format(version=__version__))
 
     @property
     def token(self) -> Optional[str]:
@@ -238,6 +258,11 @@ class Chakra:
         )
         response.raise_for_status()
 
+    def _print(self, message: str) -> None:
+        """Print a message if quiet mode is not enabled."""
+        if not self._quiet:
+            print(message)
+
     @ensure_authenticated
     def push(
         self,
@@ -268,6 +293,7 @@ class Chakra:
                 colour="green",
                 unit="B",
                 unit_scale=True,
+                disable=self._quiet,
             ) as pbar:
                 try:
                     if create_if_missing or replace_if_exists:
@@ -307,19 +333,20 @@ class Chakra:
                 except Exception as e:
                     self._handle_api_error(e)
 
-        print(
+        self._print(
             f"{Fore.GREEN}✓ Successfully pushed {total_records} records to {table_name}!{Style.RESET_ALL}\n"
         )
 
     def login(self) -> None:
         """Set the authentication token for API requests."""
-        print(f"\n{Fore.GREEN}Authenticating with Chakra DB...{Style.RESET_ALL}")
+        self._print(f"\n{Fore.GREEN}Authenticating with Chakra DB...{Style.RESET_ALL}")
 
         with tqdm(
             total=100,
             desc="Authenticating",
             bar_format="{l_bar}{bar}| {n:.0f}%",
             colour="green",
+            disable=self._quiet,
         ) as pbar:
             pbar.update(30)
             pbar.set_description("Fetching token...")
@@ -333,7 +360,7 @@ class Chakra:
             pbar.update(30)
             pbar.set_description("Authentication complete")
 
-        print(f"{Fore.GREEN}✓ Successfully authenticated!{Style.RESET_ALL}\n")
+        self._print(f"{Fore.GREEN}✓ Successfully authenticated!{Style.RESET_ALL}\n")
 
     # HACK: this is a hack to get around the fact that the duckdb go doesn't support positional parameters
     def __query_has_positional_parameters(self, query: str) -> bool:
@@ -375,32 +402,36 @@ class Chakra:
             desc="Preparing query...",
             bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} steps",
             colour="green",
+            disable=self._quiet,
         ) as pbar:
-            if self.__query_has_positional_parameters(query):
-                query, parameters = (
-                    self.__replace_position_parameters_with_autoincrement(
-                        query, parameters
+            try:
+                if self.__query_has_positional_parameters(query):
+                    query, parameters = (
+                        self.__replace_position_parameters_with_autoincrement(
+                            query, parameters
+                        )
                     )
+                pbar.set_description("Executing query...")
+                response = self._session.post(
+                    f"{BASE_URL}/api/v1/query",
+                    json={"sql": query, "parameters": parameters},
                 )
-            pbar.set_description("Executing query...")
-            response = self._session.post(
-                f"{BASE_URL}/api/v1/query",
-                json={"sql": query, "parameters": parameters},
-            )
-            response.raise_for_status()
-            pbar.update(1)
+                response.raise_for_status()
+                pbar.update(1)
 
-            pbar.set_description("Processing results...")
-            data = response.json()
-            pbar.update(1)
+                pbar.set_description("Processing results...")
+                data = response.json()
+                pbar.update(1)
 
-            pbar.set_description("Building DataFrame...")
-            df = pd.DataFrame(data["rows"], columns=data["columns"])
-            pbar.update(1)
+                pbar.set_description("Building DataFrame...")
+                df = pd.DataFrame(data["rows"], columns=data["columns"])
+                pbar.update(1)
 
-            pbar.set_description("Query execution finished.")
+                pbar.set_description("Query execution finished.")
+            except Exception as e:
+                self._handle_api_error(e)
 
-        print(f"{Fore.GREEN}✓ Query executed successfully!{Style.RESET_ALL}\n")
+        self._print(f"{Fore.GREEN}✓ Query executed successfully!{Style.RESET_ALL}\n")
         return df
 
     def _map_pandas_to_duckdb_type(self, dtype) -> str:
