@@ -251,11 +251,17 @@ class Chakra:
         )
         response.raise_for_status()
 
-    def _import_data_from_append_only_dedupe_presigned_url(self, table_name: str, s3_key: str, primary_key_columns: list[str]) -> None:
+    def _import_data_from_append_only_dedupe_presigned_url(
+        self, table_name: str, s3_key: str, primary_key_columns: list[str]
+    ) -> None:
         """Import data from a presigned URL into a table."""
         response = self._session.post(
             f"{BASE_URL}/api/v1/tables/s3_parquet_import_append_only_dedupe",
-            json={"table_name": table_name, "s3_key": s3_key, "primary_key_columns": primary_key_columns},
+            json={
+                "table_name": table_name,
+                "s3_key": s3_key,
+                "primary_key_columns": primary_key_columns,
+            },
         )
         response.raise_for_status()
 
@@ -332,7 +338,9 @@ class Chakra:
                     # Import the data into the warehouse from the presigned URL
                     pbar.set_description("Importing data into warehouse...")
                     if dedupe_on_append:
-                        self._import_data_from_append_only_dedupe_presigned_url(table_name, s3_key, primary_key_columns)
+                        self._import_data_from_append_only_dedupe_presigned_url(
+                            table_name, s3_key, primary_key_columns
+                        )
                     else:
                         self._import_data_from_presigned_url(table_name, s3_key)
                     pbar.update(1)
