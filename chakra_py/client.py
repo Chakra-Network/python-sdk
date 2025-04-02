@@ -16,7 +16,7 @@ DEFAULT_BATCH_SIZE = 1000
 TOKEN_PREFIX = "DDB_"
 
 
-__version__ = "1.0.18"
+__version__ = "1.0.19"
 __all__ = ["Chakra"]
 
 BANNER = rf"""{Fore.GREEN}
