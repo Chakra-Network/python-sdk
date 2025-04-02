@@ -8,7 +8,7 @@ import requests
 from colorama import Fore, Style
 from tqdm import tqdm
 
-from .exceptions import ChakraAPIError
+from .exceptions import ChakraAPIError, ChakraAuthError
 
 BASE_URL = "https://api.chakra.dev".rstrip("/")
 
@@ -60,16 +60,26 @@ def ensure_authenticated(func):
                 self.login()
             try:
                 return func(self, *args, **kwargs)
-            except requests.exceptions.HTTPError as e:
-                if e.response.status_code == 401:
+            except Exception as e:
+                if (
+                    isinstance(e, requests.exceptions.HTTPError)
+                    and e.response.status_code == 401
+                ) or (
+                    isinstance(e, ChakraAPIError)
+                    and e.response.status_code == 401
+                ):
                     attempt += 1
                     print(
                         f"Attempt {attempt} failed with 401. Stale token. Attempting login..."
                     )
                     self.login()
                 else:
+                    attempt += 1
+                    print(
+                        f"Attempt {attempt} failed with 401. Stale token. Attempting login..."
+                    )
                     raise
-        raise ChakraAPIError("Failed to authenticate after 3 attempts.")
+        raise ChakraAuthError("Failed to authenticate after 3 attempts.")
 
     return wrapper
 
