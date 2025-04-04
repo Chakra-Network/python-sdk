@@ -64,10 +64,7 @@ def ensure_authenticated(func):
                 if (
                     isinstance(e, requests.exceptions.HTTPError)
                     and e.response.status_code == 401
-                ) or (
-                    isinstance(e, ChakraAPIError)
-                    and e.response.status_code == 401
-                ):
+                ) or (isinstance(e, ChakraAPIError) and e.response.status_code == 401):
                     attempt += 1
                     print(
                         f"Attempt {attempt} failed with 401. Stale token. Attempting login..."

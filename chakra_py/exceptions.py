@@ -6,6 +6,7 @@ class ChakraAPIError(Exception):
         self.response = response
         super().__init__(self.message)
 
+
 class ChakraAuthError(ChakraAPIError):
     """Custom exception for Chakra authentication errors."""
 
