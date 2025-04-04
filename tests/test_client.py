@@ -135,7 +135,10 @@ def test_data_push(mock_session, mock_requests_put, mock_uuid4):
     # 3. Verify the create database request
     create_db_call = mock_session.return_value.post.call_args_list[1]
     assert create_db_call[0][0] == "https://api.chakra.dev/api/v1/databases"
-    assert create_db_call[1]["json"] == {"name": "test_database"}
+    assert create_db_call[1]["json"] == {
+        "name": "test_database",
+        "insert_database": True,
+    }
 
     # 4. Verify the create schema request
     create_schema_call = mock_session.return_value.post.call_args_list[2]
