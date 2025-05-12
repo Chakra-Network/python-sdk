@@ -16,7 +16,7 @@ DEFAULT_BATCH_SIZE = 1000
 TOKEN_PREFIX = "DDB_"
 
 
-__version__ = "1.0.21"
+__version__ = "1.0.23"
 __all__ = ["Chakra"]
 
 BANNER = rf"""{Fore.GREEN}
@@ -152,7 +152,7 @@ class Chakra:
         [database_name, schema_name, _] = table_name.split(".")
         response = self._session.post(
             f"{BASE_URL}/api/v1/databases",
-            json={"name": database_name},
+            json={"name": database_name, "insert_database": True},
         )
         if response.status_code != 409:
             # only raise error if the database doesn't already exist
@@ -215,18 +215,6 @@ class Chakra:
             json={"sql": insert_sql, "parameters": parameters},
         )
         response.raise_for_status()
-
-    def _push_to_presigned_url(self, presigned_url: str, df: pd.DataFrame) -> None:
-        """
-        Upload a pandas DataFrame to S3 as a parquet file using a presigned URL.
-
-        Args:
-            df: The pandas DataFrame to upload
-            presigned_url: The S3 presigned URL for uploading
-
-        Returns:
-            bool: True if upload was successful, False otherwise
-        """
 
     def _request_presigned_url(self, file_name: str) -> dict:
         """Request a presigned URL for the upload."""
@@ -295,6 +283,15 @@ class Chakra:
         dedupe_on_append: bool = False,
         primary_key_columns: list[str] = [],
     ) -> None:
+        # Validate table name format
+        if table_name.count(".") != 0 and table_name.count(".") != 2:
+            raise ValueError(
+                "Table name must be either a simple table name (e.g., 'my_table') or fully qualified with database and schema (e.g., 'my_database.my_schema.my_table')"
+            )
+
+        if table_name.count(".") == 0:
+            table_name = f"duckdb.main.{table_name}"
+
         """Push data to a table."""
         if not self.token:
             raise ValueError("Authentication required")
