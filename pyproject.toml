@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "chakra-py"
-version = "1.0.23"
+version = "1.0.24"
 description = "Interact with the Chakra API using Python + Pandas"
 authors = ["Chakra Labs Team"]
 license = "MIT"
@@ -24,7 +24,7 @@ python = ">=3.9,<3.13"
 pandas = "^2.1.4"
 requests = "^2.32.3"
 python-dotenv = "^1.0.1"
-numpy = "^2.0.0"
+numpy = "^1.26.4"
 pyarrow = ">=14.0.1"
 colorama = "^0.4.6"
 tqdm = "^4.66.1"
