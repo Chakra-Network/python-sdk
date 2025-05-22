@@ -1,6 +1,6 @@
 # Chakra Python SDK
 
-[![PyPI version](https://badge.fury.io/py/chakra-py.svg)](https://badge.fury.io/py/chakra-py)
+[![PyPI version](https://pypi.org/project/chakra-py.svg)](https://pypi.org/project/chakra-py)
 [![Build Status](https://github.com/Chakra-Network/python-sdk/actions/workflows/test.yml/badge.svg)](https://github.com/Chakra-Network/python-sdk/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python versions](https://img.shields.io/pypi/pyversions/chakra-py.svg)](https://pypi.org/project/chakra-py/)
